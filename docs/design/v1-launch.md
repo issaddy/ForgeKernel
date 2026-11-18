@@ -465,10 +465,11 @@ Trade-offs made in implementation, and where the result departs from the text ab
 6. **Every shape × every input group**: each round's NCU window spreads its calls over every input
    group of every shape (the sampling cap grows accordingly); tools that read shape by shape, such as
    pricing, stall and the timeline, read `meta_workloads`, which now lists every shape.
-7. **Agent commands**: built in `src/forgekernel/agents.py`. MyFlicker sends and receives
-   NDJSON for regular turns. Claude uses `claude -p`; Codex uses `codex exec`. Reference
-   generation uses each backend's native `/goal` in tmux. The local MyFlicker 2.0.36 tests
-   observed Goal evaluation and state update failures. See the [container guide](../../integrations/myflicker/README.md).
+7. **Agent commands**: built in `src/forgekernel/agents.py`. For regular turns, MyFlicker
+   reads text from stdin and returns streaming JSON. Claude uses `claude -p`, and Codex uses
+   `codex exec`. Reference generation uses each backend's native `/goal` in tmux. Local tests
+   with MyFlicker 2.0.36 observed Goal evaluation and state update failures. See the
+   [container guide](../../integrations/myflicker/README.md).
 8. **Self-evolution**: `scripts/self_evolve.py`. Only `cutedsl` tasks for now (the next generation's
    reference is sealed as Python source).
 9. **Leaderboard tasks**: `forge init <op> --leaderboard …` generates the card (and the recon tree of a

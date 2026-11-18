@@ -6,7 +6,7 @@ the container.
 
 1. Install the Linux MyFlicker CLI from your distribution channel and sign in
    inside the container. Check `myflicker --version` in the shell that runs
-   ForgeKernel. Set `FK_MYFLICKER_BIN` in `local.env` if the CLI is outside PATH.
+   ForgeKernel. Use the same shell to launch `forge` so it can call `myflicker` from PATH.
 2. Install Bubblewrap (`bwrap`) and ensure the container permits the user, mount,
    PID, and network namespaces needed by the shell sandbox.
 3. Use Python 3.11 or newer with CUDA PyTorch and, for CuTe DSL tasks,

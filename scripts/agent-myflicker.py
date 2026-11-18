@@ -56,11 +56,10 @@ def prepare_shell(directory, policy):
 
 def run_turn(cmd, timeout, prompt, directory):
     run = runpy.run_path(str(Path(__file__).with_name("timeout-run.py")))["run"]
-    message = {"type": "user", "message": {"role": "user", "content": prompt}}
-    request = directory / "turn.jsonl"
-    request.write_text(json.dumps(message, ensure_ascii=False) + "\n", encoding="utf-8")
-    with request.open() as input_file, tempfile.TemporaryFile(mode="w+") as output_file:
-        rc = run([*cmd, "-q", "--input-format", "stream-json", "--output-format", "stream-json"],
+    request = directory / "prompt.txt"
+    request.write_text(prompt, encoding="utf-8")
+    with request.open(encoding="utf-8") as input_file, tempfile.TemporaryFile(mode="w+") as output_file:
+        rc = run([*cmd, "-q", "--output-format", "stream-json"],
                  timeout, stdout=output_file, stdin=input_file)
         output_file.seek(0)
         result = None
@@ -84,7 +83,7 @@ def main():
     model, effort, timeout = sys.argv[1:4]
     policy = json.loads(Path(".agents/forgekernel-myflicker.json").read_text(encoding="utf-8"))
     binary = os.environ.get("FK_MYFLICKER_BIN") or "myflicker"
-    cmd = [binary, "--backend", "myflicker", "--cwd", str(Path.cwd()), "--model", model,
+    cmd = [binary, "--cwd", str(Path.cwd()), "--model", model,
            "--approval-mode", "yolo", "--mcp-config", '{"mcpServers":{}}']
     if effort:
         cmd.extend(("--thinking-level", effort))
@@ -94,6 +93,7 @@ def main():
         directory = Path(tmp)
         os.environ["TAKUMI_SHELL"] = str(prepare_shell(directory, policy))
         settings = policy["config"]
+        settings["agentBackend"] = "myflicker"
         auth = config_dir()
         settings["permissions"]["deny"].extend([f"Read(/{auth})", f"Read(/{auth}/**)"])
         goal = os.environ.get("FK_AGENT_DRIVER") == "goal"

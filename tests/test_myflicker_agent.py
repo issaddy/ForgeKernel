@@ -15,19 +15,21 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 
 
 @pytest.mark.parametrize("subtype, returncode", [("success", 0), ("error", 1)])
-def test_myflicker_turn_uses_native_ndjson_and_returns_terminal_reply(tmp_path, subtype,
-                                                               returncode):
+def test_myflicker_turn_uses_text_stdin_and_returns_terminal_reply(
+    tmp_path, subtype, returncode
+):
     agent = tmp_path / "myflicker"
     agent.write_text(f"""#!{sys.executable}
 import json, os, pathlib, sys
 args = sys.argv[1:]
-assert args[args.index('--backend') + 1] == 'myflicker'
+assert json.loads(pathlib.Path(args[args.index('--config') + 1]).read_text())['agentBackend'] == 'myflicker'
 assert args[args.index('--thinking-level') + 1] == 'xhigh'
-assert '--input-format' in args and '--output-format' in args and '-q' in args
+assert '--input-format' not in args and '--backend' not in args
+assert args[args.index('--output-format') + 1] == 'stream-json' and '-q' in args
 assert '--unshare-net' in pathlib.Path(os.environ['TAKUMI_SHELL']).read_text()
-assert json.loads(sys.stdin.readline())['message']['content'] == {'one' + chr(10) + '二'!r}
+assert sys.stdin.read() == {'one' + chr(10) + '二'!r}
 print(json.dumps({{'type': 'assistant', 'message': 'intermediate'}}))
-print(json.dumps({{'type': 'result', 'subtype': {subtype!r}, 'result': 'terminal reply'}}))
+print(json.dumps({{'type': 'result', 'subtype': {subtype!r}, 'content': 'terminal reply'}}))
 """, encoding="utf-8")
     agent.chmod(0o755)
     sandbox = tmp_path / "bwrap"
@@ -43,7 +45,7 @@ print(json.dumps({{'type': 'result', 'subtype': {subtype!r}, 'result': 'terminal
     result = subprocess.run(
         [sys.executable, str(SCRIPTS / "agent-myflicker.py"), "model", "xhigh", "5"],
         input="one\n二", text=True, capture_output=True, cwd=workspace,
-        env={**os.environ, "HOME": str(tmp_path), "FK_MYFLICKER_BIN": str(agent),
+        env={**os.environ, "HOME": str(tmp_path),
              "PATH": str(tmp_path) + os.pathsep + os.environ["PATH"]},
         timeout=15,
     )
