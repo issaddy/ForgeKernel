@@ -25,13 +25,14 @@ class DeploymentTests(unittest.TestCase):
 
     def test_dry_run_has_no_side_effects(self):
         with patch.object(self.m.subprocess, 'run') as run:
-            self.m.deploy(self.args('--role', 'controller', '--dry-run'))
+            self.m.deploy(self.args('--role', 'controller', '--backend', 'codex', '--dry-run'))
         run.assert_not_called()
         self.assertFalse((self.root / 'env').exists())
 
     def test_worker_has_no_agent_install(self):
         plan = self.m.plan(self.args('--role', 'gpu', '--dsl-version', '4.4.2'))
-        self.assertFalse(any('npm' in cmd or 'claude' in ' '.join(cmd) for cmd in plan))
+        self.assertFalse(any(any(name in ' '.join(cmd) for name in ('npm', 'claude', 'codex'))
+                             for cmd in plan))
         self.assertTrue(any('nvidia-cutlass-dsl==4.4.2' in cmd for cmd in plan))
 
     def test_offline_uses_local_wheels_and_existing_cli(self):
@@ -42,6 +43,30 @@ class DeploymentTests(unittest.TestCase):
         self.assertTrue(installs)
         self.assertTrue(all('--no-index' in c for c in installs))
         self.assertFalse(any('npm' in c for c in plan))
+
+    def test_codex_only_controller_deploys_only_codex(self):
+        with patch.object(self.m.shutil, 'which', return_value=None):
+            commands = self.m.plan(self.args('--role', 'controller', '--backend', 'codex',
+                                             '--codex-version', '0.169.0'))
+        self.assertTrue(any('@openai/codex@0.169.0' in c for c in commands))
+        self.assertTrue(any(c[-1] == '--help' and c[0].endswith('/.bin/codex') for c in commands))
+        self.assertFalse(any('claude' in ' '.join(c) for c in commands))
+
+    def test_myflicker_uses_provided_executable(self):
+        cli = self.root / 'myflicker'
+        cli.touch()
+        cli.chmod(0o755)
+        plan = self.m.plan(self.args('--role', 'both', '--myflicker', str(cli)))
+        self.assertIn([str(cli.resolve()), '--help'], plan)
+        self.assertFalse(any('npm' in cmd for cmd in plan))
+
+    def test_mixed_controller_deploys_both_agents(self):
+        with patch.object(self.m.shutil, 'which', return_value=None):
+            commands = self.m.plan(self.args('--role', 'controller', '--backend', 'claude',
+                                             '--backend', 'codex'))
+        npm = next(c for c in commands if c[0].endswith('/bin/npm'))
+        self.assertIn('@openai/codex', npm)
+        self.assertIn('@anthropic-ai/claude-code', npm)
 
     def test_rejects_existing_nonvenv(self):
         (self.root / 'env').mkdir()
@@ -56,7 +81,7 @@ class DeploymentTests(unittest.TestCase):
 
     def test_missing_node_is_bootstrapped_in_the_venv(self):
         with patch.object(self.m.shutil, 'which', return_value=None):
-            commands = self.m.plan(self.args('--role', 'controller'))
+            commands = self.m.plan(self.args('--role', 'controller', '--backend', 'codex'))
         self.assertTrue(any('nodejs-wheel' in c for c in commands))
         npm = next(c for c in commands if c[0].endswith('/bin/npm'))
         self.assertEqual(npm[0], str((self.root / 'env/bin/npm').resolve()))
@@ -67,7 +92,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertTrue(any('@anthropic-ai/claude-code@2.1.318' in c for c in commands))
 
     def test_controller_environment_is_isolated(self):
-        commands = self.m.plan(self.args('--role', 'controller'))
+        commands = self.m.plan(self.args('--role', 'controller', '--backend', 'codex'))
         self.assertNotIn('--system-site-packages', commands[0])
 
     def test_source_wheels_are_extracted_without_importing_native_code(self):
@@ -85,7 +110,7 @@ class DeploymentTests(unittest.TestCase):
     def test_missing_repo_fails_before_install(self):
         (self.repo / 'pyproject.toml').unlink()
         with self.assertRaises(ValueError):
-            self.m.plan(self.args('--role', 'controller'))
+            self.m.plan(self.args('--role', 'controller', '--backend', 'codex'))
 
 
 if __name__ == '__main__':

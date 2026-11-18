@@ -1,3 +1,8 @@
+---
+name: ncu-trace
+description: Read Nsight Compute metrics across ForgeKernel iterations to identify the hardware bottleneck.
+---
+
 # NCU-trace skill — let the meta agent see "how the performance metrics change" in hardware ground truth
 
 > **Operator-agnostic.** Gives the meta agent a **cross-iteration evolution of NCU metrics**, so it judges the

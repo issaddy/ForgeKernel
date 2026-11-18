@@ -5,7 +5,7 @@
 [English](README.md) | **中文**
 
 [![arXiv](https://img.shields.io/badge/arXiv-2611.04998-b31b1b)](https://arxiv.org/abs/2611.04998)
-[![Quick Start](https://img.shields.io/badge/Docs-快速开始-blue.svg)](#快速开始)
+[![Quick Start](https://img.shields.io/badge/Docs-快速开始-blue.svg)](#在-gpu-容器中快速开始)
 [![Design](https://img.shields.io/badge/Docs-设计文档-blue.svg)](docs/design/v1-launch.md)
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
@@ -29,8 +29,8 @@ ForgeKernel 属于 **Forge 家族**，同一家族的项目还有
 
 ## 动态
 
-- 🛠️ **[2026-11]** 发布 Claude Code skill `forge-start`：输入 `/forge-start`，它就替你配好并启动
-  （或续跑）一次 ForgeKernel 运行。见 [integrations/claude-code](integrations/claude-code/README.md)。
+- 🛠️ **[2026-11]** 共用的 `forge-start` 技能可配置环境、启动或续跑任务。
+  见 [GPU 容器运行说明](integrations/myflicker/README.md)。
 - 📄 **[2026-11]** ForgeKernel 论文发布：[arXiv:2611.04998](https://arxiv.org/abs/2611.04998)。
 - 📄 **[2026-10]** JustGoal 论文发布：[arXiv:2610.36434](https://arxiv.org/abs/2610.36434)。
 - 🏆 **[2026-10]** 我们在 NVIDIA [SOL-ExecBench](https://research.nvidia.com/benchmarks/sol-execbench)
@@ -62,59 +62,43 @@ ForgeKernel 属于 **Forge 家族**，同一家族的项目还有
 - 📚 **知识库比一次运行活得久。** 经 GPU 探针认证的硬件机制按 GPU 架构存放（`hw_kb/`），后续
   算子按需取用。
 
-## 🤖 让 coding agent 帮你装
+## 在 GPU 容器中快速开始
 
-先 clone 本仓库，在 clone 目录里启动 Claude Code（或任何能执行命令的 coding agent），粘贴下面这段：
+进入能看到 NVIDIA Hopper（`sm90`）或 Blackwell（`sm100`）GPU 的 Linux 容器，
+在容器内克隆本仓库。默认情况下，ForgeKernel、已登录的 MyFlicker CLI 和 GPU 作业
+都在这个容器内运行。
 
-```text
-阅读当前目录下的 README_zh.md，
-在这台机器上装好 ForgeKernel：装进虚拟环境，按我的 GPU（本机，
-或我指定的 ssh 主机）写好 local.env，然后运行 `forge new tasks/rmsnorm --dry-run`，
-把它打印的计划给我看。
-```
+**1. 准备环境。** 容器需要 Python 3.11 或更新版本、git、CUDA 版 PyTorch，以及支持
+Linux 命名空间的 Bubblewrap（`bwrap`）。安装适合容器平台的 MyFlicker CLI 并在容器内
+登录。可用时，Nsight Compute（`ncu`）用于性能分析。依赖和共用 `forge-start` 技能
+的安装方法见 [容器运行说明](integrations/myflicker/README.md)。
 
-## 快速开始
-
-**环境要求。** 运行 `forge` 的机器：Linux 或 macOS、Python ≥ 3.11、git，以及
-[Claude Code](https://docs.claude.com/en/docs/claude-code/overview) CLI（已登录，或设置
-`ANTHROPIC_API_KEY`）；任务没有参照时还需要 tmux。GPU 机器（同一台或一台 ssh 主机）：NVIDIA
-Hopper（`sm90`）或 Blackwell（`sm100`）GPU，`python3` 带 CUDA 版 PyTorch，CuTe DSL 任务还需要
-`nvidia-cutlass-dsl`；建议装 Nsight Compute（`ncu`），没有它时运行只按计时推进。
-
-**1. 安装**
+在仓库目录中，把 ForgeKernel 装到能导入 CUDA 版 PyTorch 的 Python 环境。如果 PyTorch
+已装在镜像的系统 Python 中，可以这样复用：
 
 ```bash
-cd ForgeKernel                   # 本仓库的 clone
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
-pip install nvidia-cutlass-dsl   # 建议安装，见下
-forge --version                  # forgekernel 0.1.0
+python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
+python -m pip install -e .
+python -m pip install nvidia-cutlass-dsl  # RMSNorm 示例使用 CuTe DSL
 ```
 
-coding agent 离线工作；把 `nvidia-cutlass-dsl` 装在 ForgeKernel 旁边，它才能读到要用的 CuTe
-DSL API。
+**2. 配置 `local.env`。** 首次配置时复制 `local.env.example`。使用 `FK_DELIVERY=local`，
+把 `FK_GPU` 设为容器内可见的 CUDA 设备编号。如果 CLI 不在 PATH 中，设置
+`FK_MYFLICKER_BIN`。
 
-**2. 告诉它 GPU 在哪**
+**3. 跑 RMSNorm 示例。** 示例使用 PyTorch 参照，默认目标是 Blackwell。使用 H800 等
+Hopper GPU 时，把示例 `task.toml` 里的 `arch` 设为 `"sm90"`。
 
 ```bash
-cp local.env.example local.env
-# FK_DELIVERY=local -> 本机的 GPU（FK_GPU 指定哪一张）
-# FK_DELIVERY=ssh   -> REMOTE_HOST（免密登录的 ssh 别名）和
-#                      REMOTE_WORKDIR（主机上的一个目录）
+forge new tasks/rmsnorm --dry-run
+forge new tasks/rmsnorm
 ```
 
-**3. 跑示例任务**：把 PyTorch 版 RMSNorm（每次调用 9 次 kernel launch）融合成一个 Blackwell 上
-的 CuTe DSL kernel（Hopper 上把 `task.toml` 里的 `arch` 改成 `"sm90"`）。
+执行 `forge new` 打印的 `forge run` 命令。用同一个运行目录执行 `forge status` 查看进度，
+中断后再次执行原来的 `forge run` 续跑。也可以在 tmux 中启动，让控制端在 SSH 断开后继续运行。
 
-```bash
-forge new tasks/rmsnorm --dry-run                       # 检查任务、打印计划
-forge new tasks/rmsnorm                                 # -> .artifacts/rmsnorm_<id>
-tmux new -s forge 'forge run .artifacts/rmsnorm_<id>'   # 一次运行要几个小时
-forge status .artifacts/rmsnorm_<id>                    # 查看进度
-forge run .artifacts/rmsnorm_<id>                       # 中断后续跑
-```
-
-运行达到目标时 `forge run` 返回 0（循环因达到目标而停，或最好 kernel 的最终确认达到目标），否则返回 2。
+达到目标时 `forge run` 返回 0，否则返回 2。
 
 **预期输出。** 运行依次写判据、拿参照校准判据、测参照、蒸馏 milestone，然后迭代，直到 kernel
 达到参照的 1.2 倍或预算用完。结束时生成 `.artifacts/rmsnorm_<id>/report.md`，最好的 kernel 在
@@ -128,6 +112,10 @@ forge run .artifacts/rmsnorm_<id>                       # 中断后续跑
 ```
 
 > 启动面完整说明 → [docs/design/v1-launch.md](docs/design/v1-launch.md)
+
+共用 `forge-start` 技能默认采用上述容器部署。显式切换后端时，参见
+[Claude Code](integrations/claude-code/README.md) 或 [Codex](integrations/codex/README.md)。
+如果控制端和 GPU 位于不同机器，参见 [SSH 执行方式](docs/design/v1-launch.md#9-where-it-runs)。
 
 ## 工作原理
 
@@ -168,15 +156,16 @@ forge run .artifacts/rmsnorm_<id>                       # 中断后续跑
 |---|---|---|
 | `run` + `source` | `source` | 参照的源码与硬件行为 |
 | 只写 `run`，或 `blackbox = true` | `blackbox` | 只有硬件行为 |
-| （不写） | 生成 | 先由 `/goal` 会话写出参照 |
+| （不写） | 生成 | 先由代理生成并评测参照 |
 | 改写 `[leaderboard]` | 榜单 | 榜单的题目、判据与计时 |
 
 和 ForgeTrain 一样，任务只写与 `global_config/` 不同的部分，`global_config/` 是所有任务合并的底层：
 `models.toml` 定 `[agent]`（`backend`、`provider`、`model`、`effort`、`timeout_s`；`[agent.teacher]` /
 `[agent.student]` 只改一个 agent），`loop.toml` 定 `[target]` 与 `[budget]`，`backends.toml` 列出
 `provider` 不是 `native` 时可以指定的 API 端点，key 从 `local.env` 读。默认目标是 device 时间达到参照的
-1.2 倍，内层循环 4 小时，teacher 3 轮，两个 agent 都用 `claude-opus-5-5`（论文的运行里 arch agent 用
-Claude Fable 5.1，coding agent 用 Claude Opus 5）。
+1.2 倍，内层循环 4 小时，teacher 3 轮。MyFlicker 的架构 agent 用 `wanqing/claude-opus-5.5`，
+编码 agent 用 `wanqing/gpt-6.1-sol`，两者都用 `xhigh`。论文实验使用的是 Claude Fable 5.1
+和 Claude Opus 5。
 
 ## 自进化
 
@@ -258,7 +247,7 @@ docs/                设计说明、milestone 模板、榜单、知识库收割
 scripts/             agent 启动脚本、/goal 驱动、自进化
 tests/               pytest 测试（只需 CPU）
 kernels/             ForgeKernel 生成的 kernel，按算子类型分类
-integrations/        claude-code/forge-start/：Claude Code 启动 skill（给用户用，不给 agent）
+integrations/        共用 forge-start 启动技能及各后端的配置说明
 ```
 
 ## 参与贡献

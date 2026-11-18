@@ -42,6 +42,7 @@ from forgekernel.baseline import (
 )
 from forgekernel.inner.trajectory import GATE_WINDOW_DEFAULT, GATE_WINDOWS
 from forgekernel.loop.agentctx import inspect_agent_cmd
+from forgekernel.agents import python_agent_script
 from forgekernel.loop import agent_policy as agent_policy_mod
 from forgekernel.loop import dsl_source as dsl_source_mod
 from forgekernel.loop import goal_ref as goal_ref_mod
@@ -148,19 +149,14 @@ def _end_process_group(proc: subprocess.Popen, grace_s: float = 8.0) -> None:
 
 
 
-# A /goal session is served by scripts/claude-goal.sh; scripts/agent-claude.sh hands a
-# turn to it when the caller sets FK_AGENT_DRIVER=goal.
+# FK_AGENT_DRIVER=goal selects the launcher's interactive tmux driver.
+# The Claude launcher delegates that mode to scripts/claude-goal.sh.
 _GOAL_DRIVER_MARK = "claude-goal"
 
 
 def goal_leg_findings(cmds: list[str | None], env: dict[str, str],
                       cwd: str | os.PathLike | None = None) -> list[str]:
-    """Why these agent commands would serve a /goal session as `claude -p` instead.
-
-    A caller asks for a goal session with FK_AGENT_DRIVER=goal; it is one only when the
-    command, or a script it names, reaches scripts/claude-goal.sh. Static, one level
-    deep, like the policy's command_findings: a script that builds its command at
-    runtime is not seen."""
+    """Find commands without a shipped goal-capable launcher."""
     from forgekernel.loop.agentctx import _SCRIPT_TOKEN, _expand
 
     def scripts_in(text: str) -> list[str]:
@@ -180,10 +176,10 @@ def goal_leg_findings(cmds: list[str | None], env: dict[str, str],
     for cmd in cmds:
         if not cmd:
             continue
-        if any(_GOAL_DRIVER_MARK in body for body in [cmd, *scripts_in(cmd)]):
+        if python_agent_script(cmd) or any(_GOAL_DRIVER_MARK in body for body in [cmd, *scripts_in(cmd)]):
             continue
         findings.append("agent command: does not run scripts/agent-claude.sh or "
-                        "scripts/claude-goal.sh, so it runs as written (claude -p)")
+                        "scripts/claude-goal.sh or a ForgeKernel Codex or MyFlicker launcher")
     return list(dict.fromkeys(findings))
 
 # Server-side API trouble the agent CLI surfaces as a non-zero exit: overload (529),
@@ -347,9 +343,11 @@ class RealBackend:
         drains the pipes so this side can print a line every
         ``agent_heartbeat_s`` seconds.
         """
+        isolated = bool(python_agent_script(cmd))
         proc = subprocess.Popen(
-            cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, text=True, cwd=self.workspace,
+            f"exec {cmd}" if isolated else cmd, shell=True, stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=self.workspace,
+            start_new_session=isolated,
         )
         box: dict = {}
 
@@ -375,7 +373,10 @@ class RealBackend:
             # pipes. `subprocess.run` killed the child on its way out; a Popen
             # driven from a thread must do that by hand, or the agent (a claude
             # process) outlives the loop and keeps spending API usage.
-            proc.kill()
+            if isolated:
+                _end_process_group(proc)
+            else:
+                proc.kill()
             pump.join(timeout=5)
             raise
         if "exc" in box:
@@ -389,8 +390,7 @@ class RealBackend:
         if self.agent_policy is not None:
             # Rewritten before every turn, not once: teacher and student turns share the
             # working directory, and nothing a turn does to the file may outlive it.
-            self.agent_policy.install(role, self.workspace)
-            prompt = self.agent_policy.notice(role) + prompt
+            prompt = self.agent_policy.prepare_turn(cmd, role, self.workspace) + prompt
         last = ""
         attempt = 0
         outage_waits = 0
@@ -1847,21 +1847,17 @@ def _milestone_valid(milestone: Path) -> bool:
 
 
 def _goal_ref_agent_problem(args) -> str | None:
-    """Why no agent command here can serve the reference session as a /goal session
-    (None when one can). It runs on the teacher's command (the student's when there is
-    no teacher command), under the student's rules; a command that never reaches
-    scripts/claude-goal.sh would serve it as one `claude -p` turn, which is not the session the
-    budget, the deadline and the deliverable check are built for."""
+    """Check the teacher's launcher (or the student fallback) for reference generation."""
     cmd = getattr(args, "teacher_agent_cmd", None) or args.agent_cmd
     if not cmd:
-        return "no --agent-cmd / --teacher-agent-cmd to run the /goal session with"
+        return "no --agent-cmd / --teacher-agent-cmd to generate a reference"
     try:
         found = goal_leg_findings([cmd], dict(os.environ), cwd=os.getcwd())
     except Exception as e:  # noqa: BLE001
         return f"could not inspect the agent command ({e})"
     if found:
         return ("the reference session needs a goal-capable agent command "
-                "(scripts/agent-claude.sh): " + "; ".join(found))
+                "(ForgeKernel Claude or Codex launcher): " + "; ".join(found))
     return None
 
 
@@ -2344,6 +2340,8 @@ def _main(argv: list[str] | None = None) -> int:
         # would see this shell's ANTHROPIC_MODEL / ANTHROPIC_BASE_URL as legs.
         agent_env = {k: v for k, v in os.environ.items() if not k.startswith("ANTHROPIC_")}
         for cmd in window_cmds:
+            if python_agent_script(cmd):
+                continue
             window_problems.extend(context_window_findings(inspect_agent_cmd(cmd, agent_env,
                                                                      args.workspace)))
     if window_problems and not args.dry_run:

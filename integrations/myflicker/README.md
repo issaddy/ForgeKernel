@@ -1,0 +1,52 @@
+# MyFlicker in a GPU container
+
+Run ForgeKernel, MyFlicker, and the GPU jobs in the same Linux container. Use a
+checkout in a persistent directory if you plan to resume runs after recreating
+the container.
+
+1. Install the Linux MyFlicker CLI from your distribution channel and sign in
+   inside the container. Check `myflicker --version` in the shell that runs
+   ForgeKernel. Set `FK_MYFLICKER_BIN` in `local.env` if the CLI is outside PATH.
+2. Install Bubblewrap (`bwrap`) and ensure the container permits the user, mount,
+   PID, and network namespaces needed by the shell sandbox.
+3. Use Python 3.11 or newer with CUDA PyTorch and, for CuTe DSL tasks,
+   `nvidia-cutlass-dsl`. Follow the [quick start](../../README.md#quick-start-in-a-gpu-container)
+   to install ForgeKernel in that environment.
+4. Copy `local.env.example` on first setup. Keep `FK_DELIVERY=local` and set
+   `FK_GPU` to the CUDA device index visible in the container. For H800, use
+   `arch = "sm90"` in `task.toml`.
+
+The defaults are `wanqing/claude-opus-5.5` for the architecture agent and
+`wanqing/gpt-6.1-sol` for the coding agent, both with `xhigh`. The native
+provider uses the account configured in MyFlicker. Override the model or effort
+in the task's `[agent]`, `[agent.teacher]`, or `[agent.student]` settings.
+
+## Start a run
+
+```bash
+forge new tasks/rmsnorm --dry-run
+forge new tasks/rmsnorm
+```
+
+Run the `forge run` command printed by `forge new`. Use `forge status` with the
+same run directory to see progress. Repeat the original `forge run` command to
+resume. Run state and reports live in the checkout's `.artifacts/` directory.
+
+RMSNorm includes a PyTorch reference. Tasks that generate their own reference
+use native `/goal` in tmux. In local tests with MyFlicker 2.0.36, the evaluator
+paused or blocked even after the CLI recorded valid tool output. Supply a
+reference for the initial container run to use the ordinary turn path.
+
+## Use the shared startup skill
+
+From the checkout inside the container:
+
+```bash
+mkdir -p .agents/skills
+cp -R integrations/claude-code/forge-start .agents/skills/
+```
+
+Open MyFlicker in the checkout and ask it to use `forge-start` to preflight
+`tasks/rmsnorm` without starting a run. To start the run, give the task, the
+container's CUDA device index, and the budget. The launcher resolves both role
+configurations and uses `--role both` for the container setup.

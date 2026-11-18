@@ -9,7 +9,7 @@ What the scaffold creates (`forge init <op> --kernel-file ...`):
 ```
 operators/<op>/
   README.md                  # this file: target / shapes / where the reference source is (a pointer; the student must not read it)
-  submit.toml                # which machine the jobs run on (forge run writes it from local.env: this machine or one ssh host)
+  submit.toml                # which machine the jobs run on (forge run writes it from local.env: local GPU container by default, or an SSH host)
   submit.local.toml.example  # configuration that must not be committed (e.g. the sealed reference's key) goes in submit.local.toml
   agent/                     # operator-specific copies rendered from meta/*_prompt.md
   .gitignore
@@ -316,31 +316,17 @@ ref_hardware = "H100"
 
 ### What an agent can touch (enforced by the harness, `src/forgekernel/loop/agent_policy.py`)
 
-- **The student is always offline**: WebFetch / WebSearch are removed and Bash network access is
-  refused by the sandbox (three layers: `deniedDomains = ["*"]`; a `WebFetch(domain:*)` deny rule that
-  cuts the network for commands inside the sandbox too; `failIfUnavailable`, so a sandbox that fails
-  to come up stops the run instead of silently letting it through); the reference source and the
-  teacher-only trees (the recon tree, the reference measurement / pricing tree, a source run's oracle
-  **and the directory it sits in**) cannot be read.
-- **The student can write only its own working directory**: the rest of the run repository (meta
-  prompts, hw_kb, other operator trees, the hook scripts themselves) is not writable; only the teacher
-  has write access to the whole repo (it has to land the milestone and KB recipes).
-- **The teacher may go online** (docs, forums, papers), but code from the web must not be copied into
-  the milestone / KB; **a blackbox run's teacher must not read the reference source** — the local
-  checkout of the reference is refused by the sandbox (this one is a hard boundary); on the network
-  side there is only the hook as a **tripwire**: it normalizes `:` to `/` and then matches the declared
-  fragments and their `org/repo` pairs, so `github.com/org/Ref`, `raw.githubusercontent.com/org/ref/...`,
-  `api.github.com/repos/...`, `cdn.jsdelivr.net/gh/...`, `git@github.com:org/Ref` and
-  `pip download ref-lib` are all refused, but **a fetch that never spells out the repository name (a
-  short link, a second-hand mirror, a script that assembles the URL at run time) cannot be stopped**;
-  that still relies on the discipline of the teacher prompt.
-- Before every agent turn the driver writes that role's rules into `.claude/settings.json` in the
-  working directory (Claude Code project settings: deny rules + Bash sandbox + PreToolUse hook; added to
-  that repo's `.git/info/exclude`, a linked worktree goes through the common dir), and states the rules
-  at the top of the prompt. So the agent command must run in the working directory and read the
-  project settings: an agent leg with `--setting-sources` not including `project` (including an empty
-  value), `--bare`, `--settings` (it overrides the project settings), `env -C`, or a `cd` first
-  (including `(cd … && claude)`) before starting the agent is refused by the start preflight (exit 15).
+- The student normally works offline with its own writable working directory. Reference
+  source and teacher-only trees are withheld. The teacher can write milestones and recipes
+  into the run repository.
+- The teacher can use the network for public material when the task policy allows it.
+  Blackbox tasks withhold local reference source. MyFlicker turns with declared reference
+  URL restrictions disable shell networking and web tools.
+- The driver prepares role-specific rules in the agent's working directory before each turn.
+  MyFlicker uses CLI tool permissions and Bubblewrap for the shell. Codex uses its CLI
+  permission profile. Claude Code uses `.claude/settings.json` with deny rules, a Bash
+  sandbox, and a PreToolUse hook. Custom Claude launch commands must load the project
+  settings from the working directory.
 
 Where the reference is, is declared in loop.toml:
 

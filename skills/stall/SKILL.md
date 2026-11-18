@@ -1,3 +1,8 @@
+---
+name: stall
+description: Use Nsight Compute PC-sampling data to locate per-instruction GPU stalls.
+---
+
 # stall
 
 Where the time actually leaks: the measured PC-sampling stall counters of a `.ncu-rep`

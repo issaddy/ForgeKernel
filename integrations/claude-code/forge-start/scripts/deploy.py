@@ -10,6 +10,9 @@ import subprocess
 import sys
 import tomllib
 
+AGENT_PACKAGES = {'claude': '@anthropic-ai/claude-code', 'codex': '@openai/codex'}
+BACKENDS = (*AGENT_PACKAGES, 'myflicker')
+
 
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
@@ -22,12 +25,32 @@ def parse_args(argv=None):
     p.add_argument('--torch-spec', help='Explicit CUDA torch package spec, if absent from image')
     p.add_argument('--index-url', help='Verified pip index for this machine')
     p.add_argument('--wheelhouse', type=Path, help='Offline wheel directory; disables pip indexes')
-    p.add_argument('--claude', type=Path, help='Existing executable; required for offline controller setup')
-    p.add_argument('--claude-version', help='Version to install when Claude CLI is absent')
+    p.add_argument('--backend', choices=BACKENDS, action='append',
+                   help='Controller backend to deploy (repeatable, defaults to MyFlicker)')
+    for backend in BACKENDS:
+        p.add_argument(f'--{backend}', type=Path, help=f'Path to an existing {backend} executable')
+    for backend in AGENT_PACKAGES:
+        p.add_argument(f'--{backend}-version', help=f'Install this {backend} version in the environment')
     p.add_argument('--npm-registry', help='Verified npm registry')
     p.add_argument('--gpu', type=int, default=0)
     p.add_argument('--dry-run', action='store_true')
     return p.parse_args(argv)
+
+
+def agent_binary(a, backend, *, deployed=False):
+    explicit = getattr(a, backend)
+    private = a.env.resolve() / 'agent/node_modules/.bin' / backend
+    if explicit:
+        binary = explicit.expanduser().resolve()
+        if not binary.is_file() or not os.access(binary, os.X_OK):
+            raise ValueError(f'{backend} executable is unavailable: {binary}')
+        return binary
+    if getattr(a, f'{backend}_version', None):
+        return private if deployed and os.access(private, os.X_OK) else None
+    if private.is_file() and os.access(private, os.X_OK):
+        return private
+    found = shutil.which(backend)
+    return Path(found) if found else None
 
 
 def plan(a):
@@ -45,15 +68,16 @@ def plan(a):
         raise ValueError('Choose wheelhouse or index-url, not both')
     controller = a.role in ('controller', 'both')
     gpu = a.role in ('gpu', 'both')
-    cli = a.claude.resolve() if a.claude else None
-    if cli and (not cli.is_file() or not os.access(cli, os.X_OK)):
-        raise ValueError(f'Claude executable is unavailable: {cli}')
-    if not cli and controller:
-        found = None if a.claude_version else shutil.which('claude')
-        if found:
-            cli = Path(found).resolve()
-        elif a.wheelhouse:
-            raise ValueError('Offline controller deployment requires --claude')
+    backends = a.backend or [name for name in BACKENDS
+                            if getattr(a, name) or getattr(a, f'{name}_version', None)] or ['myflicker']
+    binaries = {name: agent_binary(a, name) for name in backends} if controller else {}
+    missing = [name for name, binary in binaries.items() if binary is None]
+    if 'myflicker' in missing:
+        raise ValueError('Install the Linux MyFlicker CLI from your distribution channel and '
+                         'pass --myflicker /path/to/myflicker or put it on PATH')
+    if missing and a.wheelhouse:
+        raise ValueError('Offline controller deployment requires ' +
+                         ', '.join(f'--{name} or an installed {name} CLI' for name in missing))
     if a.dsl_source_wheels:
         if a.role != 'controller':
             raise ValueError('Source-only DSL wheels require controller role')
@@ -80,19 +104,21 @@ def plan(a):
         commands.append(pip + ['nvidia-cutlass-dsl==' + a.dsl_version])
     for wheel in a.dsl_source_wheels or []:
         commands.append([py, '-m', 'zipfile', '-e', str(wheel.resolve()), str(env / 'dsl-source')])
-    if controller:
-        if cli is None:
-            npm = shutil.which('npm')
-            if not npm or not shutil.which('node'):
-                commands.append(pip + ['nodejs-wheel'])
-                npm = str(env / 'bin/npm')
-            cmd = [npm, 'install', '--prefix', str(env / 'agent'), '--fetch-timeout=30000', '--fetch-retries=0']
-            if a.npm_registry:
-                cmd += ['--registry', a.npm_registry]
-            cmd += ['@anthropic-ai/claude-code' + ('@' + a.claude_version if a.claude_version else '')]
-            commands.append(cmd)
-            cli = env / 'agent/node_modules/.bin/claude'
-        commands.append([str(cli), '--help'])
+    if missing:
+        npm = shutil.which('npm')
+        if not npm or not shutil.which('node'):
+            commands.append(pip + ['nodejs-wheel'])
+            npm = str(env / 'bin/npm')
+        cmd = [npm, 'install', '--prefix', str(env / 'agent'), '--fetch-timeout=30000', '--fetch-retries=0']
+        if a.npm_registry:
+            cmd += ['--registry', a.npm_registry]
+        for name in missing:
+            version = getattr(a, f'{name}_version')
+            cmd.append(AGENT_PACKAGES[name] + (f'@{version}' if version else ''))
+            binaries[name] = env / 'agent/node_modules/.bin' / name
+        commands.append(cmd)
+    for binary in binaries.values():
+        commands.append([str(binary), '--help'])
     commands.append([str(env / 'bin/forge'), '--help'])
     if gpu:
         code = ('import torch; '

@@ -49,8 +49,8 @@ def test_minimal_task_takes_every_default(tmp_path):
     assert t.arch == "sm100"
     assert t.reference is None and t.mode == task_mod.MODE_GENERATE
     assert t.target.ratio == 1.2 and t.target.ms is None and t.target.timing == "device"
-    assert t.teacher.backend == "claude" and t.teacher.model == "claude-opus-5-5"
-    assert t.student.effort is None
+    assert (t.teacher.backend, t.teacher.model, t.teacher.effort) == ("myflicker", "wanqing/claude-opus-5.5", "xhigh")
+    assert (t.student.backend, t.student.model, t.student.effort) == ("myflicker", "wanqing/gpt-6.1-sol", "xhigh")
     assert (t.budget.hours, t.budget.max_meta, t.budget.reference_hours) == (4.0, 3, 8.0)
     assert [s.name for s in t.shapes] == ["small", "large"]
     assert all(s.groups_to_add == 3 for s in t.shapes)
@@ -58,13 +58,14 @@ def test_minimal_task_takes_every_default(tmp_path):
 
 
 def test_the_task_overrides_global_config_key_by_key(tmp_path):
-    toml = MINIMAL + ('[target]\nms = 0.5\n[agent]\nmodel = "claude-fable-5-1"\ntimeout_s = 600\n'
+    toml = MINIMAL + ('[target]\nms = 0.5\n[agent]\nbackend = "claude"\n'
+                      'model = "claude-fable-5-1"\ntimeout_s = 600\n'
                       '[agent.student]\neffort = "low"\n[budget]\nhours = 1\n')
     t = load_task(_task(tmp_path, toml), kb_root=_kb(tmp_path))
     assert t.target.ms == 0.5 and t.target.ratio is None and t.target.timing == "device"
     # the task's [agent] beats the global [agent.teacher] key by key, its own role table beats both
     assert (t.teacher.model, t.teacher.effort, t.teacher.timeout_s) == ("claude-fable-5-1",
-                                                                         "high", 600)
+                                                                         "xhigh", 600)
     assert (t.student.model, t.student.effort, t.student.timeout_s) == ("claude-fable-5-1",
                                                                          "low", 600)
     assert t.teacher.provider == t.student.provider == "native"
@@ -80,7 +81,8 @@ def test_a_provider_must_be_declared_and_its_key_set(tmp_path, monkeypatch):
     monkeypatch.setattr(provider, "global_config_dir", lambda: gc)
     with pytest.raises(TaskError, match="provider must be one of"):
         load_task(_task(tmp_path, MINIMAL + '[agent]\nprovider = "nope"\n'), kb_root=_kb(tmp_path))
-    t = load_task(_task(tmp_path, MINIMAL + '[agent]\nprovider = "gw"\n', name="gwtask"),
+    claude = '[agent]\nbackend = "claude"\nmodel = "claude-opus-5-5"\n'
+    t = load_task(_task(tmp_path, MINIMAL + claude + 'provider = "gw"\n', name="gwtask"),
                   kb_root=_kb(tmp_path))
     with pytest.raises(provider.ProviderError, match="GW_KEY"):
         agents.agent_command(t.student, "student", env={})
@@ -88,7 +90,7 @@ def test_a_provider_must_be_declared_and_its_key_set(tmp_path, monkeypatch):
     assert cmd.startswith("env ANTHROPIC_BASE_URL=https://gw.example/anthropic "
                           "FK_PROVIDER_KEY_ENV=GW_KEY bash ")
     assert "secret" not in cmd and cmd.endswith(" 7200")
-    native = load_task(_task(tmp_path, MINIMAL, name="nat"), kb_root=_kb(tmp_path))
+    native = load_task(_task(tmp_path, MINIMAL + claude, name="nat"), kb_root=_kb(tmp_path))
     assert agents.agent_command(native.teacher, "teacher").startswith("bash ")
 
 
@@ -128,7 +130,7 @@ def test_every_problem_is_reported_at_once(tmp_path):
     toml = ('[task]\nlanguage = "triton"\narch = "h100"\n'
             '[target]\nratio = 1.5\nms = 0.2\ntiming = "wall"\n'
             '[budget]\nhours = 0\nmax_meta = -1\n'
-            '[agent.student]\nbackend = "codex"\n'
+            '[agent.student]\nbackend = "unknown"\n'
             '[extra]\nx = 1\n')
     with pytest.raises(TaskError) as e:
         load_task(_task(tmp_path, toml, shapes=False, description=None), kb_root=_kb(tmp_path))

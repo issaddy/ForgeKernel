@@ -63,6 +63,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from forgekernel.agents import CODEX_POLICY_FILE, MYFLICKER_POLICY_FILE, MYFLICKER_SCRIPT, python_agent_script
 from forgekernel.loop import lang_mode
 from forgekernel.paths import operators_dir
 
@@ -363,6 +364,70 @@ class AgentPolicy:
         return "\n".join(lines) + "\n\n"
 
     # -- installation ------------------------------------------------------------------
+
+    def prepare_turn(self, cmd: str, role: str, workspace: Path) -> str:
+        """Install the policy for the active launcher and return its prompt prefix."""
+        script = python_agent_script(cmd)
+        if not script:
+            self.install(role, workspace)
+            return self.notice(role)
+
+        from forgekernel import skills
+
+        workspace = workspace.resolve()
+        skills.mirror(workspace, skills.CODEX_MIRROR_RELPATH)
+        _git_exclude(workspace, "/.agents/")
+        if script == MYFLICKER_SCRIPT:
+            settings = self.settings(role, workspace)
+            policy_path = workspace / MYFLICKER_POLICY_FILE
+            fs = settings["sandbox"]["filesystem"]
+            denied = [*fs["denyRead"], str(self.repo_root / "local.env")]
+            fs["denyWrite"].extend([str(workspace / ".agents"), str(self.repo_root / ".git")])
+            settings["permissions"]["deny"].extend(
+                f"Read(/{path}{suffix})" for path in denied for suffix in ("", "/**")
+            )
+            settings["permissions"]["deny"].extend(
+                [f"Edit(/{workspace / '.agents'}/**)", "mcp__*"]
+            )
+            network = not (self.offline(role) or self.no_cluster(role) or self.deny_urls(role))
+            if not network:
+                settings["permissions"]["deny"].extend(["WebFetch", "WebSearch"])
+            _git_exclude(workspace, "/.claude/")
+            (workspace / POLICY_RELPATH).parent.mkdir(parents=True, exist_ok=True)
+            (workspace / POLICY_RELPATH).write_text(
+                json.dumps(self.policy_document(role)), encoding="utf-8"
+            )
+            policy_path.write_text(json.dumps({
+                "config": {key: settings[key] for key in ("permissions", "hooks") if key in settings},
+                "filesystem": {**fs, "denyRead": denied},
+                "network": network,
+            }), encoding="utf-8")
+            return self.notice(role)
+
+        files = {str(p): "write" for p in self.allow_write(role)}
+        for path in (*self._deny_write_paths(workspace), self.repo_root / ".git"):
+            files[str(path)] = "read"
+        auth_dir = _abs(os.environ.get("CODEX_HOME") or "~/.codex")
+        for path in (*self._deny_paths(role, workspace), auth_dir / "auth.json",
+                     self.repo_root / "local.env"):
+            files[str(path)] = "deny"
+        if self.no_cluster(role):
+            files[str(Path(__file__).resolve().parents[1] / "submit")] = "deny"
+
+        # Hosted search has no per-reference URL filter and is independent of the shell.
+        search = not (self.offline(role) or self.deny_urls(role))
+        shell_network = search and not self.no_cluster(role)
+        (workspace / CODEX_POLICY_FILE).write_text(json.dumps({
+            "filesystem": files,
+            "network_enabled": shell_network,
+            "web_search": "cached" if search else "disabled",
+        }, ensure_ascii=False) + "\n", encoding="utf-8")
+        notice = self.notice(role)
+        if not self.offline(role) and not shell_network:
+            access = ("Use hosted web search for public material." if search else
+                      "Hosted web search is disabled for this turn's reference URL restrictions.")
+            notice += f"Codex shell commands have no network access. {access}\n\n"
+        return notice
 
     def install(self, role: str, workspace: Path) -> Path:
         """Write this role's settings into ``workspace`` and keep them out of git.

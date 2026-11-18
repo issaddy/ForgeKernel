@@ -29,11 +29,14 @@
     timing = "device"               # device | e2e
 
     [agent]                         # both agents; [agent.teacher] / [agent.student] for one
-    backend   = "claude"
+    backend   = "myflicker"
     provider  = "native"            # or a table of global_config/backends.toml
-    model     = "claude-opus-5-5"
-    effort    = "high"
+    model     = "wanqing/gpt-6.1-sol"
+    effort    = "xhigh"
     timeout_s = 7200                # one turn's wall clock
+
+    [agent.teacher]
+    model = "wanqing/claude-opus-5.5"
 
     [budget]
     hours           = 4             # inner-loop wall clock
@@ -83,7 +86,7 @@ LANGUAGES = ("cutedsl", "cuda")
 # The loop's own language name for each task language (forgekernel.loop.lang_mode).
 LOOP_LANGUAGE = {"cutedsl": "cutedsl", "cuda": "cuda-sol"}
 TIMINGS = ("device", "e2e")
-BACKENDS = ("claude",)
+BACKENDS = ("claude", "codex", "myflicker")
 ROLES = ("teacher", "student")
 MIN_INPUT_GROUPS = 3
 

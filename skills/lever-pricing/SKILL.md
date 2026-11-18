@@ -1,3 +1,8 @@
+---
+name: lever-pricing
+description: Use GPU ablations to measure the individual and combined effects of proposed kernel optimizations.
+---
+
 # lever-pricing
 
 Measured prices of candidate levers on the current best kernel, in one GPU job: each lever

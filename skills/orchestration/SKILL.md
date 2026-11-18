@@ -1,3 +1,8 @@
+---
+name: orchestration
+description: Analyze synchronization, instruction supply, and pipeline roles from GPU kernel profiles.
+---
+
 # orchestration
 
 Sync topology and supply organisation read off the SASS page, and who leaves the tensor pipe

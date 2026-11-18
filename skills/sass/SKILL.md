@@ -1,3 +1,8 @@
+---
+name: sass
+description: Analyze kernel SASS for instruction structure, scheduling, register liveness, and launch geometry.
+---
+
 # sass
 
 Static reads of a kernel's SASS, all from the page one `ncu --set source` collection (or a

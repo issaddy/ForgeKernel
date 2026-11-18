@@ -25,7 +25,8 @@ def _task(root: Path, name="rmsnorm") -> Path:
     d = root / "tasks" / name
     d.mkdir(parents=True)
     (d / "task.toml").write_text('[task]\nlanguage = "cutedsl"\narch = "sm100"\n'
-                                 '[agent.teacher]\nmodel = "claude-opus-5-5"\neffort = "high"\n'
+                                 '[agent.teacher]\nbackend = "claude"\n'
+                                 'model = "claude-opus-5-5"\neffort = "high"\n'
                                  '[budget]\nhours = 2.5\n')
     (d / "description.md").write_text("y = x * w\n")
     (d / "shapes.json").write_text('[{"name": "s", "axes": {"m": 4}}]')

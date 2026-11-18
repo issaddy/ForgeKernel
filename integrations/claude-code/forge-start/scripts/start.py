@@ -45,24 +45,31 @@ def probe_gpu(cmd):
     return json.loads(result.stdout.strip().splitlines()[-1])
 
 
-def execute(args):
+def launch_context(args):
     from forgekernel.task import load_task
     from forgekernel.localenv import load_machine
-    from forgekernel.runs import new_run, open_run
-    from forgekernel.launch import cmd_new, cmd_run
+    from forgekernel.runs import open_run
     from forgekernel.paths import repo_root
 
     if repo_root().resolve() != args.repo.resolve():
         raise ValueError('Installed ForgeKernel does not match the selected repository')
-    os.chdir(args.repo)
-    task = load_task(args.task)
-    machine = load_machine()
     # Inspect the snapshot when resuming; configuration changes must not silently retarget it.
     if args.session.exists():
         record = json.loads(args.session.read_text())
         if record['task'] != str(args.task):
             raise ValueError('Session task differs from the requested task')
-        task = load_task(open_run(record['run']).task_dir)
+        run = open_run(record['run'])
+        task = load_task(run.task_dir, name=run.task_name)
+    else:
+        task = load_task(args.task)
+    return task, load_machine(args.repo)
+
+
+def execute(args, task, machine):
+    from forgekernel.runs import new_run
+    from forgekernel.launch import cmd_new, cmd_run
+
+    os.chdir(args.repo)
     code = ('import json,torch; '
             f'd={int(machine.gpu)}; '
             'x=torch.ones(8,device=f"cuda:{d}"); assert x.sum().item()==8; '
@@ -102,22 +109,35 @@ def main():
     args.task = args.task.resolve()
     args.session = args.session.resolve()
     target_python = installation.env.resolve() / 'bin/python'
-    if Path(sys.prefix).resolve() != installation.env.resolve():
+    bootstrap = Path(sys.prefix).resolve() != installation.env.resolve()
+    if bootstrap:
+        # The task parser only needs the checkout and Python's standard library.
+        # Use it before installing dependencies so both roles get the right CLI.
+        sys.path.insert(0, str(args.repo / 'src'))
+    task, machine = launch_context(args)
+    installation.backend = list(dict.fromkeys((task.teacher.backend, task.student.backend)))
+    for backend in installation.backend:
+        flag = f'FK_{backend.upper()}_BIN'
+        configured = os.environ.get(flag) or machine.env.get(flag)
+        if (configured and not getattr(installation, backend)
+                and not getattr(installation, f'{backend}_version', None)):
+            executable = Path(configured).expanduser()
+            found = shutil.which(configured) if '/' not in configured else None
+            setattr(installation, backend, Path(found) if found else args.repo / executable)
+    if bootstrap:
         deploy.deploy(installation)
         os.execv(str(target_python), [str(target_python), str(Path(__file__).resolve()), *sys.argv[1:]])
-    cli = installation.claude
-    if not cli:
-        installed = installation.env.resolve() / 'agent/node_modules/.bin/claude'
-        cli = installed if installed.is_file() else shutil.which('claude')
-    if not cli:
-        raise ValueError('Claude CLI is missing; rerun deploy.py')
-    os.environ['FK_CLAUDE_BIN'] = str(Path(cli).resolve())
+    for backend in installation.backend:
+        cli = deploy.agent_binary(installation, backend, deployed=True)
+        if not cli:
+            raise ValueError(f'{backend} CLI is missing; rerun deploy.py')
+        os.environ[f'FK_{backend.upper()}_BIN'] = str(cli.resolve())
     os.environ['PATH'] = str(target_python.parent) + os.pathsep + os.environ.get('PATH', '')
     if installation.dsl_source_wheels:
         source = str(installation.env.resolve() / 'dsl-source')
         sys.path.insert(0, source)
         os.environ['PYTHONPATH'] = source + os.pathsep + os.environ.get('PYTHONPATH', '')
-    return execute(args)
+    return execute(args, task, machine)
 
 
 if __name__ == '__main__':

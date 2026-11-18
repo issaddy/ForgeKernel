@@ -294,6 +294,29 @@ class Tmux:
         if r.returncode != 0:
             raise RuntimeError(f"tmux new-session {name}: {r.stderr.strip()}")
 
+    def start_agent(self, name: str, argv: list[str], cwd: Path, env: dict, rundir: Path) -> Path:
+        """Launch with the caller's environment and clean up if its driver dies."""
+        envf, launcher, pidf = (rundir / file for file in ("env.sh", "launch.sh", "agent.pid"))
+        envf.write_text(env_file_text(env), encoding="utf-8")
+        envf.chmod(0o600)
+        owner = os.getpid()
+        kill_session = shlex.join([*self.base, "kill-session", "-t", f"={name}"])
+        launcher.write_text(
+            f". {shlex.quote(str(envf))}\nrm -f {shlex.quote(str(envf))}\n"
+            f"export TERM={shlex.quote(env.get('FK_GOAL_TERM', 'xterm-256color'))}\n"
+            f"cd {shlex.quote(str(cwd))} || exit 97\n"
+            f"echo $$ > {shlex.quote(str(pidf))}\n"
+            "( trap '' HUP TERM INT\n"
+            f"  while kill -0 {owner} 2>/dev/null && kill -0 $$ 2>/dev/null; do sleep 3; done\n"
+            f"  kill -0 {owner} 2>/dev/null && exit 0\n"
+            "  if kill -0 $$ 2>/dev/null; then kill -TERM $$ 2>/dev/null; sleep 5;"
+            " kill -KILL $$ 2>/dev/null; fi\n"
+            f"  {kill_session} ) >/dev/null 2>&1 &\n"
+            "exec " + shlex.join(argv) + "\n",
+            encoding="utf-8")
+        self.start(name, shlex.join(["env", "-i", "/bin/bash", str(launcher)]), str(cwd))
+        return pidf
+
     def kill(self, name: str) -> None:
         if self.exists(name):
             self.run("kill-session", "-t", f"={name}")
@@ -614,40 +637,10 @@ class GoalLeg:
                  "/goal " + self.spec["condition"]]
         self.rundir = Path(tempfile.mkdtemp(prefix="fk-goal-run-"))
         os.chmod(self.rundir, 0o700)
-        envf = self.rundir / "env.sh"
-        env = {k: v for k, v in self.env.items() if k not in NESTED_ENV}
-        envf.write_text(env_file_text(env), encoding="utf-8")
-        os.chmod(envf, 0o600)
-        pidf = self.rundir / "claude.pid"
-        launcher = self.rundir / "launch.sh"
-        me = os.getpid()
         role = re.sub(r"[^A-Za-z0-9]", "", self.env.get("ROLE", "") or self.spec.get("role", ""))
         prefix = self.env.get("FK_GOAL_SESSION_PREFIX", "fkturn")
         self.session = f"{prefix}-{role or 'agent'}-{self.sid[:8]}-{os.getpid()}"
-        kill_session = " ".join(shlex.quote(a) for a in (
-            *self.tmux.base, "kill-session", "-t", f"={self.session}"))
-        launcher.write_text(
-            "#!/bin/bash\n"
-            "# Started under `env -i`: nothing from the tmux server's environment leaks in.\n"
-            f". {shlex.quote(str(envf))}\nrm -f {shlex.quote(str(envf))}\n"
-            f"export TERM={shlex.quote(self.env.get('FK_GOAL_TERM', 'xterm-256color'))}\n"
-            f"cd {shlex.quote(str(self.cwd))} || exit 97\n"
-            f"echo $$ > {shlex.quote(str(pidf))}\n"
-            "# Orphan guard: when the leg that owns this session dies (even by SIGKILL),\n"
-            "# end claude (this PID after exec) within seconds, then this session — by its\n"
-            "# exact name; remain-on-exit would otherwise keep the dead pane around.\n"
-            "# It ignores HUP/TERM: claude's exit hangs up the pane, and the guard must\n"
-            "# outlive that to remove the session.\n"
-            f"( trap '' HUP TERM INT\n"
-            f"  while kill -0 {me} 2>/dev/null && kill -0 $$ 2>/dev/null; do sleep 3; done\n"
-            f"  kill -0 {me} 2>/dev/null && exit 0\n"
-            "  if kill -0 $$ 2>/dev/null; then kill -TERM $$ 2>/dev/null; sleep 5;"
-            " kill -KILL $$ 2>/dev/null; fi\n"
-            f"  {kill_session} ) >/dev/null 2>&1 &\n"
-            "exec " + " ".join(shlex.quote(a) for a in argv) + "\n",
-            encoding="utf-8")
-        self.tmux.start(self.session, f"env -i /bin/bash {shlex.quote(str(launcher))}",
-                        str(self.cwd))
+        pidf = self.tmux.start_agent(self.session, argv, self.cwd, self.env, self.rundir)
         self.save_session(False, "running")
         say(f"session {self.session} ({'resumed' if resume else 'new'} sid {self.sid}, "
             f"model {self.flag}, cwd {self.cwd}, turn {self.turn_dir.name})", self.turn_dir)

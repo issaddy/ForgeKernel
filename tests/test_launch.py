@@ -279,9 +279,15 @@ class _Teacher:
         return run_agent
 
 
-def test_forge_run_drives_every_stage(repo, monkeypatch):
+@pytest.mark.parametrize("backend", ["claude", "codex", "myflicker"])
+def test_forge_run_drives_every_stage(repo, monkeypatch, backend):
     from forgekernel.loop import cli as loop_cli
-    task_dir = _task(repo)
+    toml = REF_TOML
+    if backend == "codex":
+        toml += '\n[agent]\nbackend = "codex"\nmodel = "gpt-6.2-sol"\n'
+    if backend == "claude":
+        toml += '\n[agent]\nbackend = "claude"\nmodel = "claude-opus-5-5"\neffort = "high"\n'
+    task_dir = _task(repo, toml=toml)
     teacher = _Teacher()
     calls = {}
     monkeypatch.setattr(loop_cli.RealBackend, "run_agent", teacher.method)
@@ -296,7 +302,9 @@ def test_forge_run_drives_every_stage(repo, monkeypatch):
     argv = calls["loop"]
     assert argv[0] == "rmsnorm" and argv[argv.index("--workspace") + 1] == str(run.ws)
     assert argv[argv.index("--equivalence-ratio") + 1] == "1.2"
-    assert "scripts/agent-claude.sh" in argv[argv.index("--agent-cmd") + 1]
+    launcher = "scripts/agent-claude.sh" if backend == "claude" else f"scripts/agent-{backend}.py"
+    assert launcher in argv[argv.index("--agent-cmd") + 1]
+    assert launcher in argv[argv.index("--teacher-agent-cmd") + 1]
     assert (run.ws / ".git").exists() and (run.dir / "report.md").is_file()
     assert json.loads((run.operators_dir / "rmsnorm" / taskcard.PROBLEM).read_text())[
         "tolerance"]["outputs"] == {"y": 2e-6}
@@ -370,8 +378,8 @@ def test_forge_init_copies_the_task_template(tmp_path, monkeypatch):
     assert {p.name for p in d.iterdir()} == {"task.toml", "description.md", "shapes.json"}
     task = load_task(d, kb_root=tmp_path)
     assert task.target.ratio == 1.2 and task.mode == "generate"
-    assert task.teacher.effort == "high" and task.teacher.timeout_s == 14400
-    assert task.student.timeout_s == 7200 and task.student.provider == "native"
+    assert task.teacher.effort == "xhigh" and task.teacher.timeout_s == 14400
+    assert task.student.effort == "xhigh" and task.student.timeout_s == 7200
     assert launch.cmd_init(["gemm"]) == 2
 
 

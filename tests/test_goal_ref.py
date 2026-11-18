@@ -6,6 +6,7 @@ verdict is written into the kernel source."""
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -132,6 +133,87 @@ def _gen(tmp_path: Path, kernels: list[str], *, hours: float = 1.0, linger: floa
 WRONG_FAST = "def run(x, out):\n    pass\n# MS=0.5\n"
 SLOW_OK = "def run(x, out):\n    out.copy_(x)\n# MS=2.0 # OK\n"
 FAST_OK = "def run(x, out):\n    out.copy_(x)\n# MS=0.8 # OK\n"
+
+
+def test_codex_native_goal_resumes_by_session_id(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from forgekernel.agents import agent_command
+    from forgekernel.loop.agent_policy import AgentPolicy
+    from forgekernel.loop.cli import _goal_ref_agent_problem
+    from forgekernel.task import AgentSpec
+
+    g, gpus, trace = _gen(tmp_path, [FAST_OK])
+    body = (tmp_path / "agent.py").read_text()
+    fake_state = tmp_path / "fake-tmux.json"
+    tmux = tmp_path / "tmux"
+    tmux.write_text(f"#!{sys.executable}\n" + f"STATE = {str(fake_state)!r}\nBODY = {body!r}\n"
+                    + textwrap.dedent("""\
+        import json, os, pathlib, shlex, sys
+        state_file = pathlib.Path(STATE)
+        state = json.loads(state_file.read_text()) if state_file.exists() else {
+            "starts": [], "sent": [], "killed": 0,
+        }
+        args = sys.argv[1:]
+        command = args[0]
+        sid = "98e27b49-ffb1-439f-9602-ae17d6831b81"
+        turn = pathlib.Path(os.environ["FK_GOAL_TURN_DIR"])
+        condition = json.loads((turn / "spec.json").read_text())["condition"]
+        if command == "new-session":
+            launcher = pathlib.Path(shlex.split(args[args.index("-c") + 2])[-1])
+            argv = shlex.split(launcher.read_text().splitlines()[-1])[1:]
+            assert 'tui.status_line=["session-id"]' in argv
+            state["starts"].append(argv)
+            state["submitted"] = False
+        elif command == "display-message":
+            print("0")
+        elif command == "capture-pane":
+            if state["submitted"] or len(state["starts"]) > 1:
+                print("Goal hit usage limits (/goal resume)")
+            print("› Ask Codex to do anything")
+            if not state["submitted"]:
+                print(f"  {sid} · Ctrl+G for agents")
+        elif command == "load-buffer":
+            state["buffer"] = pathlib.Path(args[-1]).read_text()
+        elif command == "send-keys" and "-l" in args:
+            assert args[-1] == "/goal "
+            state["prefix"] = args[-1]
+        elif command == "send-keys":
+            entered = state.pop("prefix") + state["buffer"]
+            state["sent"].append(entered)
+            state["submitted"] = True
+            if len(state["starts"]) == 1:
+                assert entered == "/goal " + condition
+            else:
+                assert entered == "/goal resume"
+                exec(BODY, {})
+        elif command == "kill-session":
+            state["killed"] += 1
+        else:
+            assert command in ("paste-buffer", "has-session"), args
+        state_file.write_text(json.dumps(state))
+        """))
+    tmux.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path), prepend=os.pathsep)
+    monkeypatch.setenv("FK_CODEX_BIN", sys.executable)  # Assert argv without starting Codex.
+    monkeypatch.setenv("FK_GOAL_POLL_S", "0.02")
+    monkeypatch.setenv("FK_GOAL_SETTLE_S", "0.02")
+    g.agent_cmd = agent_command(AgentSpec("codex", "test-model", "high"), "teacher")
+    g.policy = AgentPolicy("source", g.root, student_online=True,
+                           deny_write=tuple(gr.session_read_only_paths(g.op_dir)))
+    g.sleep = lambda delay: time.sleep(min(delay, 0.05))
+    assert _goal_ref_agent_problem(SimpleNamespace(agent_cmd=g.agent_cmd)) is None
+
+    state = gr.generate(g)
+    assert state["status"] == gr.STATUS_ACCEPTED
+    assert len(gpus[0].jobs) == 3  # one candidate and two acceptance measurements
+    assert gr.OK_LINE in trace.read_text()
+    assert [a["rc"] for a in state["attempts"]] == [1, 0]
+    commands = json.loads(fake_state.read_text())
+    assert "resume" not in commands["starts"][0]
+    sid = "98e27b49-ffb1-439f-9602-ae17d6831b81"
+    assert commands["starts"][1][1:3] == ["resume", sid]
+    assert (gr.Paths.of(g.op_dir).session / "codex-session-id").read_text().strip() == sid
+    assert commands["killed"] == 2
 
 
 # -- the decision -------------------------------------------------------------------------

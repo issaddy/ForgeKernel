@@ -16,10 +16,11 @@ from forgekernel.paths import global_config_dir
 BACKENDS_FILE = "backends.toml"
 NATIVE = "native"
 # The wire protocol each agent CLI speaks.
-_BACKEND_WIRE = {"claude": "anthropic"}
-# What the turn's launcher reads (scripts/agent-claude.sh): the endpoint, and the name of
+_BACKEND_WIRE = {"claude": "anthropic", "codex": "responses"}
+# What the turn's launcher reads: the endpoint, and the name of
 # the variable holding its key -- the key itself never appears on a command line.
 BASE_URL_ENV = "ANTHROPIC_BASE_URL"
+CODEX_BASE_URL_ENV = "FK_CODEX_BASE_URL"
 KEY_ENV_ENV = "FK_PROVIDER_KEY_ENV"
 
 
@@ -62,4 +63,5 @@ def grant(backend: str, name: str, env: dict | None = None,
     if not env.get(p["key_env"]):
         raise ProviderError(f"provider {name!r} needs {p['key_env']}; set it in local.env or "
                             f"the environment")
-    return {BASE_URL_ENV: p["base_url"], KEY_ENV_ENV: p["key_env"]}
+    url_env = CODEX_BASE_URL_ENV if backend == "codex" else BASE_URL_ENV
+    return {url_env: p["base_url"], KEY_ENV_ENV: p["key_env"]}

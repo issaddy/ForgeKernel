@@ -5,7 +5,7 @@
 **English** | [中文](README_zh.md)
 
 [![arXiv](https://img.shields.io/badge/arXiv-2611.04998-b31b1b)](https://arxiv.org/abs/2611.04998)
-[![Quick Start](https://img.shields.io/badge/Docs-Quick%20Start-blue.svg)](#quick-start)
+[![Quick Start](https://img.shields.io/badge/Docs-Quick%20Start-blue.svg)](#quick-start-in-a-gpu-container)
 [![Design](https://img.shields.io/badge/Docs-Design-blue.svg)](docs/design/v1-launch.md)
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](LICENSE)
@@ -31,9 +31,8 @@ ForgeKernel is part of the **Forge family**, together with
 
 ## News
 
-- 🛠️ **[2026-11]** Claude Code skill `forge-start` released: type `/forge-start` and it sets up
-  and launches (or resumes) a ForgeKernel run for you. See
-  [integrations/claude-code](integrations/claude-code/README.md).
+- 🛠️ **[2026-11]** The shared `forge-start` skill can set up, launch, and resume a run.
+  See the [GPU container guide](integrations/myflicker/README.md).
 - 📄 **[2026-11]** ForgeKernel paper release: [arXiv:2611.04998](https://arxiv.org/abs/2611.04998).
 - 📄 **[2026-10]** JustGoal paper release: [arXiv:2610.36434](https://arxiv.org/abs/2610.36434).
 - 🏆 **[2026-10]** We reached **#1** on the FlashInfer-Bench leaderboard of NVIDIA
@@ -72,62 +71,45 @@ Planned for **ForgeKernel v1.5**:
 - 📚 **A knowledge base that outlives the run.** Hardware mechanisms certified by a GPU probe are
   stored per GPU architecture (`hw_kb/`) and prescribed to later operators.
 
-## 🤖 Set it up with a coding agent
+## Quick Start in a GPU container
 
-Clone this repository, then paste this into Claude Code (or any coding agent that can run shell
-commands) started in the clone:
+Enter a Linux container with an NVIDIA Hopper (`sm90`) or Blackwell (`sm100`) GPU
+and clone this repository there. The default setup runs ForgeKernel, the authenticated
+MyFlicker CLI, and GPU jobs in that container.
 
-```text
-Read README.md in this directory and set up ForgeKernel on this machine:
-install it in a virtual environment, write local.env for my GPU (this
-machine, or the ssh host I name) and run `forge new tasks/rmsnorm --dry-run`.
-Show me the plan it prints.
-```
+**1. Set up the container.** Use Python 3.11 or newer, git, CUDA PyTorch, and Bubblewrap
+(`bwrap`) with Linux namespace support. Install MyFlicker for the container's platform
+and sign in inside the container. Nsight Compute (`ncu`) enables profiling when
+counters are available. See the [container guide](integrations/myflicker/README.md)
+for the prerequisites and the shared `forge-start` skill.
 
-## Quick Start
-
-**Requirements.** The machine you run `forge` on: Linux or macOS, Python ≥ 3.11, git, and the
-[Claude Code](https://docs.claude.com/en/docs/claude-code/overview) CLI (logged in, or an
-`ANTHROPIC_API_KEY`); tmux if a task has no reference. The GPU machine (the same one, or an ssh
-host): an NVIDIA Hopper (`sm90`) or Blackwell (`sm100`) GPU, `python3` with a CUDA build of
-PyTorch and, for CuTe DSL tasks, `nvidia-cutlass-dsl`; Nsight Compute (`ncu`) is recommended,
-and without it a run proceeds on timings alone.
-
-**1. Install**
+From the checkout, install ForgeKernel into an environment that can import CUDA
+PyTorch. If PyTorch is installed in the image's system Python, reuse it in the venv:
 
 ```bash
-cd ForgeKernel                   # a clone of this repository
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
-pip install nvidia-cutlass-dsl   # recommended, see below
-forge --version                  # forgekernel 0.1.0
+python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
+python -m pip install -e .
+python -m pip install nvidia-cutlass-dsl  # for the CuTe DSL example
 ```
 
-The coding agent works offline; installing `nvidia-cutlass-dsl` next to ForgeKernel is how it
-reads the CuTe DSL API it writes against.
+**2. Set up `local.env`.** Copy `local.env.example` on first setup. Keep
+`FK_DELIVERY=local`, set `FK_GPU` to the CUDA device index visible inside the
+container, and set `FK_MYFLICKER_BIN` if the CLI is outside PATH.
 
-**2. Say where the GPU is**
+**3. Run the RMSNorm example.** It uses a PyTorch reference and targets Blackwell by
+default. On Hopper, including H800, set `arch = "sm90"` in the task's `task.toml`.
 
 ```bash
-cp local.env.example local.env
-# FK_DELIVERY=local -> the GPU on this machine (FK_GPU picks the device)
-# FK_DELIVERY=ssh   -> REMOTE_HOST (an ssh alias that logs in without a
-#                      prompt) and REMOTE_WORKDIR (a directory on it)
+forge new tasks/rmsnorm --dry-run
+forge new tasks/rmsnorm
 ```
 
-**3. Run the example task**: fuse a PyTorch RMSNorm (nine kernel launches a call) into one CuTe DSL
-kernel on a Blackwell GPU (set `arch = "sm90"` in `task.toml` for Hopper).
+Run the `forge run` command printed by `forge new`. Use `forge status` with the same run
+directory to check progress, and repeat that `forge run` command to resume after an
+interruption. An optional tmux session keeps the controller running if you disconnect.
 
-```bash
-forge new tasks/rmsnorm --dry-run                       # check the task, print the plan
-forge new tasks/rmsnorm                                 # -> .artifacts/rmsnorm_<id>
-tmux new -s forge 'forge run .artifacts/rmsnorm_<id>'   # a run takes hours
-forge status .artifacts/rmsnorm_<id>                    # progress
-forge run .artifacts/rmsnorm_<id>                       # continue after an interruption
-```
-
-`forge run` exits 0 when the run reaches its target -- the loop stopped on it, or the final
-confirmation of the best kernel meets it -- and 2 otherwise.
+`forge run` exits 0 when the run reaches its target and 2 otherwise.
 
 **Expected output.** The run writes the correctness judge, calibrates it against the reference,
 measures the reference, distils a milestone, and iterates until the kernel is 1.2× the
@@ -142,6 +124,11 @@ PyTorch reference after about 1.5 hours:
 ```
 
 > Full launch reference → [docs/design/v1-launch.md](docs/design/v1-launch.md)
+
+The shared `forge-start` skill defaults to the container setup above. To explicitly
+select another agent backend, see [Claude Code](integrations/claude-code/README.md)
+or [Codex](integrations/codex/README.md). For a separate GPU host, see
+[SSH delivery](docs/design/v1-launch.md#9-where-it-runs).
 
 ## How It Works
 
@@ -188,7 +175,7 @@ The reference decides the mode:
 |---|---|---|
 | `run` + `source` | `source` | the reference's source and its hardware behavior |
 | `run` only, or `blackbox = true` | `blackbox` | hardware behavior only |
-| (none) | generate | a `/goal` session writes a reference first |
+| (none) | generate | the agent generates and evaluates a reference first |
 | `[leaderboard]` instead | leaderboard | the board's problem, judge and clock |
 
 A task writes only what differs from `global_config/`, the bottom layer every task is merged
@@ -196,8 +183,10 @@ onto, as in ForgeTrain: `models.toml` sets `[agent]` (`backend`, `provider`, `mo
 `timeout_s`; `[agent.teacher]` / `[agent.student]` for one agent), `loop.toml` sets `[target]`
 and `[budget]`, and `backends.toml` lists the API endpoints a `provider` other than `native`
 can name, with the key read from `local.env`. The defaults are a 1.2× target in device time,
-4 hours of loop, 3 teacher rounds, and `claude-opus-5-5` for both agents (the paper's runs used
-Claude Fable 5.1 as the arch agent and Claude Opus 5 as the coding agent).
+4 hours of loop, and 3 teacher rounds. MyFlicker uses `wanqing/claude-opus-5.5` for the
+architecture agent and `wanqing/gpt-6.1-sol` for the coding agent, both with `xhigh`.
+The paper's runs used
+Claude Fable 5.1 as the arch agent and Claude Opus 5 as the coding agent.
 
 ## Self-Evolution
 
@@ -286,7 +275,7 @@ docs/                design notes, milestone template, leaderboards, KB
 scripts/             agent launcher, /goal driver, self-evolution
 tests/               pytest suite (CPU only)
 kernels/             kernels generated by ForgeKernel, by operator type
-integrations/        claude-code/forge-start/: the Claude Code launch skill (for you, not the agents)
+integrations/        shared forge-start skill and backend setup guides
 ```
 
 ## Contributing

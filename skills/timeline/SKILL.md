@@ -1,3 +1,8 @@
+---
+name: timeline
+description: Use GPU sampling timelines and segment stamps to determine when a kernel pipeline stalls.
+---
+
 # timeline
 
 When the time leaks, which the per-instruction ledger cannot say (it sums every phase that

@@ -23,7 +23,7 @@
 4. **There is exactly one reference.** It is both the source the teacher reads (when readable) and
    the source of the target speed.
 5. **The core depends on no particular infrastructure.** Only two ways to reach a GPU are supported:
-   this machine and ssh.
+   local execution in the controller environment and SSH delivery to a separate GPU host.
 
 ---
 
@@ -79,13 +79,14 @@ ratio  = 1.2                        # multiple of the reference's speed (>1 = fa
 timing = "device"                   # the timing basis: device | e2e
 
 [agent.teacher]
-backend = "claude"
-model   = "claude-opus-5-5"
-effort  = "high"
+backend = "myflicker"
+model   = "wanqing/claude-opus-5.5"
+effort  = "xhigh"
 
 [agent.student]
-backend = "claude"
-model   = "claude-opus-5-5"
+backend = "myflicker"
+model   = "wanqing/gpt-6.1-sol"
+effort  = "xhigh"
 
 [budget]
 hours    = 4                        # the inner loop's wall clock
@@ -107,10 +108,10 @@ endpoints). The "Default" column below is what `global_config/` holds.
 | | `deny` | no | `[]` | extra paths no agent may read |
 | `[target]` | `ratio` / `ms` | no | `ratio = 1.2` | one or the other; by default 20% faster than the reference; without a reference and without `ms`, see §3.3 |
 | | `timing` | no | `device` | the timing basis |
-| `[agent]` (both agents), `[agent.teacher]`, `[agent.student]` (one) | `backend` | no | `claude` | the agent CLI; V1 supports only `claude` |
+| `[agent]` (both agents), `[agent.teacher]`, `[agent.student]` (one) | `backend` | no | `myflicker` | the agent CLI, `myflicker`, `claude`, or `codex` |
 | | `provider` | no | `native` | where the tokens go: `native` = the CLI's own login state and environment; or a name from `backends.toml` |
-| | `model` | no | `claude-opus-5-5` | the model actually used is written into the run's snapshot |
-| | `effort` | no | teacher `high`; student left to the CLI | reasoning effort |
+| | `model` | no | teacher `wanqing/claude-opus-5.5`, student `wanqing/gpt-6.1-sol` | model requested from the selected CLI |
+| | `effort` | no | `xhigh` for both roles | reasoning effort |
 | | `timeout_s` | no | student 7200; teacher 14400 | one turn's wall-clock limit |
 | `[budget]` | `hours` | no | `4` | the inner loop's wall clock |
 | | `max_meta` | no | `3` | the cap on outer rounds |
@@ -280,15 +281,16 @@ the run directory, the delivery) is as for an ordinary task. Details are in
 - One table each for the teacher and the student, with structured fields: `backend`, `provider`,
   `model`, `effort`, `timeout_s`. The harness builds the command itself, so it can handle /goal
   sessions, session continuation, usage accounting and permission settings uniformly.
-- V1 supports only `backend = "claude"` (the Claude Code CLI); the field stays so that adding a backend
-  later does not change the format.
+- MyFlicker is the default. Configure the account in the Linux GPU container. To select
+  Claude Code or Codex, set `backend = "claude"` or `backend = "codex"` and choose a
+  model and reasoning effort available to that CLI.
 - With `provider = "native"`, the CLI's own login state and environment decide where the tokens go;
-  any other provider is an endpoint in `global_config/backends.toml`, whose key is read from the
-  variable its `key_env` names.
+  Claude Code and Codex also accept an endpoint in `global_config/backends.toml`. Its key
+  comes from the variable named by `key_env`.
 - Credentials are read only from the environment or from `local.env`; they never appear in any file
   under version control.
-- Without a `model`, `claude-opus-5-5` is used; the model actually used is written into the run's
-  snapshot.
+- The run's task snapshot preserves explicit agent overrides. Settings omitted there come
+  from `global_config/models.toml`.
 
 ---
 
@@ -327,20 +329,22 @@ used up, or the teacher judges the target unreachable and the reachability check
 
 | Delivery | What it does |
 |---|---|
-| `local` | the GPU is on this machine; jobs run directly |
+| `local` (default) | ForgeKernel and the agents run in the same GPU container and execute jobs there directly |
 | `ssh` | each job's code tree (`git archive`) is sent over ssh to a GPU machine, unpacked and run there, and the results are brought back |
 
-The machine is described in `local.env` at the repository root (not in git), never in the task
-definition:
+Put the machine settings in the repository's gitignored `local.env`. For the default
+container deployment:
 
+```dotenv
+FK_DELIVERY=local
+FK_GPU=0
+# FK_MYFLICKER_BIN=/path/to/myflicker
 ```
-FK_DELIVERY=ssh             # local | ssh
-FK_GPU=0                    # which GPU
-REMOTE_HOST=gpu-box         # an ssh alias that logs in non-interactively
-REMOTE_WORKDIR=/data/fk     # a directory on the host used only by forgekernel
-REMOTE_ENV_FILE=            # optional: a script sourced before every command
-ANTHROPIC_API_KEY=...
-```
+
+For a separate GPU host, use `FK_DELIVERY=ssh`. Set `REMOTE_HOST` to an SSH alias
+that can execute commands non-interactively, and `REMOTE_WORKDIR` to an absolute
+directory dedicated to ForgeKernel. `REMOTE_ENV_FILE` can name a script sourced
+on the GPU host before each job.
 
 - **Pre-start check**: before the loop, a very short NCU probe job runs on the target machine to see
   whether performance counters can be collected (§14, item 5).
@@ -461,9 +465,10 @@ Trade-offs made in implementation, and where the result departs from the text ab
 6. **Every shape × every input group**: each round's NCU window spreads its calls over every input
    group of every shape (the sampling cap grows accordingly); tools that read shape by shape, such as
    pricing, stall and the timeline, read `meta_workloads`, which now lists every shape.
-7. **Agent commands**: built in one place, `scripts/agent-claude.sh`; an ordinary turn is `claude -p`
-   under a wall-clock timeout, and when /goal is needed (`FK_AGENT_DRIVER=goal`) it hands over to
-   `scripts/claude-goal.sh`. A /goal session needs tmux.
+7. **Agent commands**: built in `src/forgekernel/agents.py`. MyFlicker sends and receives
+   NDJSON for regular turns. Claude uses `claude -p`; Codex uses `codex exec`. Reference
+   generation uses each backend's native `/goal` in tmux. The local MyFlicker 2.0.36 tests
+   observed Goal evaluation and state update failures. See the [container guide](../../integrations/myflicker/README.md).
 8. **Self-evolution**: `scripts/self_evolve.py`. Only `cutedsl` tasks for now (the next generation's
    reference is sealed as Python source).
 9. **Leaderboard tasks**: `forge init <op> --leaderboard …` generates the card (and the recon tree of a

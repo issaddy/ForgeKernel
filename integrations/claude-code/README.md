@@ -1,35 +1,30 @@
 # Claude Code integration
 
-`forge-start/` is a [Claude Code skill](https://docs.claude.com/en/docs/claude-code/skills) that
-launches ForgeKernel for you: it finds or clones the repository, asks only for what it cannot
-infer (operator, GPU, reference, budget), deploys the dependencies on the controller and the GPU
-machine, validates the task and runs `forge new` / `forge run`, or resumes an existing run.
+ForgeKernel defaults to [MyFlicker in a GPU container](../myflicker/README.md).
+Claude Code can invoke the shared [forge-start skill](forge-start/SKILL.md) and
+can also be selected explicitly as an agent backend.
 
-## Install
+## Use the startup skill from Claude Code
 
 ```bash
 mkdir -p ~/.claude/skills
 cp -R integrations/claude-code/forge-start ~/.claude/skills/
 ```
 
-Do not copy it into the repository's `skills/`: that directory is mirrored to the teacher and
-student agents of every run.
+In Claude Code, type `/forge-start Preflight tasks/rmsnorm in the GPU container.
+Do not start a run.` The launch script uses the task's backend settings and
+repository defaults. The repository's `skills/` directory serves the internal
+architecture and coding agents.
 
-## Use
+## Select Claude Code as an agent backend
 
-Start Claude Code and type `/forge-start`, or ask in plain words, for example:
+Install Claude Code where `forge` runs. Sign in there or set `ANTHROPIC_API_KEY`
+or `CLAUDE_CODE_OAUTH_TOKEN` in `local.env`. Set `backend = "claude"` and a Claude
+model available to your account in the task's `[agent]` table. Role-specific
+settings belong in `[agent.teacher]` or `[agent.student]`. Set `FK_CLAUDE_BIN`
+in `local.env` if the CLI is outside PATH.
 
-```text
-/forge-start Preflight the rmsnorm example only; do not launch.
-/forge-start Optimize tasks/<op> on GPU 0 of the ssh host <host>.
-```
-
-A preflight validates the configuration and prints the plan without creating a run. A launch
-needs a GPU on this machine or on an ssh host (the delivery modes ForgeKernel supports), and
-Claude credentials for the agents (see `local.env.example`). Unless you give a budget, the
-skill sets the loop's `hours` to 24 and shows the effective budget for you to confirm.
-
-The scripts need Python 3.11 or newer. Their unit tests run on the CPU:
+Run the startup scripts' CPU-only tests with Python 3.11 or newer:
 
 ```bash
 python3 -m unittest discover -s integrations/claude-code/forge-start/tests

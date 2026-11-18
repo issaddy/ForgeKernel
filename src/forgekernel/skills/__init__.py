@@ -20,6 +20,7 @@ from forgekernel.paths import skills_dir
 SKILL_FILE = "SKILL.md"
 # Where Claude Code looks for a project's skills, relative to the agent's working directory.
 MIRROR_RELPATH = Path(".claude") / "skills"
+CODEX_MIRROR_RELPATH = Path(".agents") / "skills"
 
 
 def skill_dirs() -> list[Path]:
@@ -27,10 +28,9 @@ def skill_dirs() -> list[Path]:
     return sorted(d for d in root.iterdir() if (d / SKILL_FILE).is_file()) if root.is_dir() else []
 
 
-def mirror(workspace: Path) -> list[str]:
-    """Copy every skill into ``<workspace>/.claude/skills/<name>/`` (the caller keeps
-    ``.claude/`` out of git), replacing whatever a previous turn left there."""
-    dst_root = Path(workspace) / MIRROR_RELPATH
+def mirror(workspace: Path, relpath: Path = MIRROR_RELPATH) -> list[str]:
+    """Copy the shipped skills to the selected backend's project skills directory."""
+    dst_root = Path(workspace) / relpath
     names = []
     for d in skill_dirs():
         dst = dst_root / d.name

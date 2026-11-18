@@ -17,13 +17,11 @@ import sys
 import time
 
 
-def main() -> int:
-    secs = float(sys.argv[1])
-    argv = sys.argv[2:]
+def run(argv, secs, *, stdout=None, stdin=None) -> int:
     # start_new_session: the child becomes a session leader, so its pgid == its
     # pid and os.killpg hits the child plus anything it spawned (Claude's own
     # helpers) without touching the shared proxy daemon (a different session).
-    proc = subprocess.Popen(argv, start_new_session=True)
+    proc = subprocess.Popen(argv, stdin=stdin, stdout=stdout, start_new_session=True)
 
     # The child's own session is out of reach of a signal sent to THIS process's group:
     # the loop ends an agent turn by SIGTERM to the group it started (agent-claude.sh and
@@ -66,6 +64,10 @@ def main() -> int:
                 pass
         proc.wait()
         return 124
+
+
+def main() -> int:
+    return run(sys.argv[2:], float(sys.argv[1]))
 
 
 if __name__ == "__main__":

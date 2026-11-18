@@ -5,12 +5,10 @@ does what the student is asked to reproduce. A card that has none (a leaderboard
 scaffolded without ``--sealed-ref`` / ``--binary-ref``, a hand-made card whose loop.toml
 names no ``oracle``) had nothing to distil from: ``_has_distillation_input`` said no, the
 teacher never ran, and the student started against whatever milestone was on disk — on a
-fresh card, none. This module closes that gap the way a source reference is often written by
-hand: an interactive ``claude`` driven by ``/goal`` writes the kernel from scratch on the
-card's own harness, the harness (not the agent) picks and re-measures the best correct
-version, and that version becomes the run's oracle (source mode). From there the loop is
-unchanged: the teacher distils milestone v1 from it, the student starts from the card's
-stub as in every source-mode run.
+fresh card, none. The agent uses its native ``/goal`` in tmux to write and evaluate a kernel
+on the card's harness. ForgeKernel re-measures the best correct candidate and uses it as
+the oracle. The teacher then distils milestone v1 from it and the student starts from the
+card's stub as in every source-mode run.
 
 When it runs (``[loop] ref_from_goal`` / ``--ref-from-goal``):
 
@@ -87,6 +85,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from forgekernel.agents import python_agent_script
 from forgekernel.paths import operators_dir
 
 MODES = ("auto", "always", "off")
@@ -1163,6 +1162,8 @@ def generate(g: Generation, resume: dict | None = None) -> dict:
             "reply": str(reply), "check": command("check", str(paths.root)),
             "condition": condition_text(ws=ws, kernel_file=g.kernel_file,
                                         deadline=deadline, reply=reply)}
+    if script := python_agent_script(g.agent_cmd):
+        spec["session_id_file"] = str(_agent_session_file(paths, script))
     (paths.turn / "spec.json").write_text(json.dumps(spec, indent=1, ensure_ascii=False) + "\n",
                                           encoding="utf-8")
     backend = g.make_backend(tree_op(g.op), tree)
@@ -1188,6 +1189,7 @@ def _reap_orphan(g: Generation, state: dict) -> None:
     same workspace, that group is ended — only after checking that its leader is still
     the agent command this generation started (a recycled PID is left alone)."""
     import signal
+    original_cmd = state.get("agent_cmd") or g.agent_cmd
     for rec in state.get("attempts") or []:
         pgid = rec.get("pgid")
         if not pgid or "end" in rec:
@@ -1195,7 +1197,12 @@ def _reap_orphan(g: Generation, state: dict) -> None:
         r = subprocess.run(["ps", "-ww", "-p", str(pgid), "-o", "command="],
                            capture_output=True, text=True)
         cmdline = r.stdout.strip()
-        if r.returncode == 0 and cmdline and g.agent_cmd.strip() in cmdline:
+        # A native Codex leg is the process-group leader and carries its unique
+        # turn directory in argv. A legacy shell command includes the original text.
+        script = python_agent_script(original_cmd)
+        native_agent = (script and script in cmdline
+                        and str(Paths.of(g.op_dir).turn) in cmdline)
+        if r.returncode == 0 and cmdline and (native_agent or original_cmd.strip() in cmdline):
             g.log(f"ending the agent session an interrupted run left behind (pgid {pgid})")
             try:
                 os.killpg(int(pgid), signal.SIGTERM)
@@ -1210,11 +1217,21 @@ def _reap_orphan(g: Generation, state: dict) -> None:
     save_state(g.op_dir, state)
 
 
+def _agent_session_file(paths: Paths, script: str) -> Path:
+    backend = Path(script).stem.removeprefix("agent-")
+    return paths.session / f"{backend}-session-id"
+
+
 def _run_session(g: Generation, state: dict, svc: Service, ws: Path, task: str) -> None:
     paths = svc.paths
     deadline = float(state["deadline"])
+    leg_end = deadline + g.report_s
+    script = python_agent_script(g.agent_cmd)
     attempts = state.setdefault("attempts", [])
     _reap_orphan(g, state)
+    if script and state.get("agent_cmd") != g.agent_cmd:
+        _agent_session_file(paths, script).unlink(missing_ok=True)
+    state["agent_cmd"] = g.agent_cmd
     while True:
         now = g.now()
         if now >= deadline:
@@ -1229,10 +1246,8 @@ def _run_session(g: Generation, state: dict, svc: Service, ws: Path, task: str) 
             return
         prompt = task
         if g.policy is not None:
-            g.policy.install("student", ws)
-            prompt = g.policy.notice("student") + task
+            prompt = g.policy.prepare_turn(g.agent_cmd, "student", ws) + prompt
         remaining = int(deadline - now)
-        leg_end = deadline + g.report_s
         env = dict(os.environ)
         env.update({"FK_AGENT_DRIVER": "goal", "FK_GOAL_TURN_DIR": str(paths.turn),
                     # the session's clock covers the report window past the deadline
@@ -1248,7 +1263,8 @@ def _run_session(g: Generation, state: dict, svc: Service, ws: Path, task: str) 
         attempts.append(rec)
         save_state(g.op_dir, state)
         with open(out_p, "w", encoding="utf-8") as fo, open(err_p, "w", encoding="utf-8") as fe:
-            proc = subprocess.Popen(g.agent_cmd, shell=True, stdin=subprocess.PIPE, stdout=fo,
+            cmd = [*shlex.split(g.agent_cmd), str(paths.turn)] if script else g.agent_cmd
+            proc = subprocess.Popen(cmd, shell=not script, stdin=subprocess.PIPE, stdout=fo,
                                     stderr=fe, text=True, cwd=str(ws), env=env,
                                     start_new_session=True)
             rec["pgid"] = proc.pid
@@ -1281,7 +1297,8 @@ def _run_session(g: Generation, state: dict, svc: Service, ws: Path, task: str) 
                 raise
         rc = proc.wait()
         svc.serve_pending()
-        rec.update(end=g.now(), rc=rc, outcome=_leg_outcome(paths.turn))
+        outcome = ("completed" if rc == 0 else "failed") if script else _leg_outcome(paths.turn)
+        rec.update(end=g.now(), rc=rc, outcome=outcome)
         save_state(g.op_dir, state)
         g.log(f"attempt {k} ended rc={rc} ({rec['outcome'] or 'no leg result'}; "
               f"{svc.summary_line()})")

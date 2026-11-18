@@ -236,6 +236,52 @@ def test_a_backend_without_a_policy_runs_the_prompt_untouched(tmp_path):
     assert not (tmp_path / ".claude").exists()
 
 
+def test_codex_turn_mirrors_skills_and_passes_role_policy(tmp_path, monkeypatch):
+    import sys
+    import tomllib
+    from forgekernel.agents import agent_command
+    from forgekernel.task import AgentSpec
+
+    policy, ref, teacher_tree = _policy(tmp_path, mode="source")
+    ws = tmp_path / "codex workspace"
+    ws.mkdir()
+    stub = tmp_path / "codex stub"
+    stub.write_text(f"#!{sys.executable}\n"
+                    "import json, os, sys\n"
+                    "from pathlib import Path\n"
+                    "assert sys.argv[1] == 'exec' and sys.argv[-1] == '-'\n"
+                    "assert '--ephemeral' in sys.argv and '--json' in sys.argv\n"
+                    "config = [sys.argv[i + 1] for i, x in enumerate(sys.argv) if x == '-c']\n"
+                    "reply = Path(sys.argv[sys.argv.index('--output-last-message') + 1])\n"
+                    "reply.write_text(json.dumps(config) + '\\n' + sys.stdin.read())\n"
+                    "print(json.dumps({'type': 'error', 'message': 'Reconnect'}))\n"
+                    "if os.environ.get('FK_TEST_CODEX_FAIL'):\n"
+                    "    print(json.dumps({'type': 'turn.failed', 'error': 'Test turn failed'}))\n"
+                    "print(json.dumps({'type': 'turn.completed'}))\n")
+    stub.chmod(0o755)
+    monkeypatch.setenv("FK_CODEX_BIN", str(stub))
+    cmd = agent_command(AgentSpec("codex", "test-model", "high"), "student")
+    be = cli.RealBackend("demo", ws, cmd, "n", "e", agent_policy=policy, agent_retries=1)
+
+    student, prompt = be.run_agent("STUDENT PROMPT", role="student").split("\n", 1)
+    teacher, _ = be.run_agent("TEACHER PROMPT", role="teacher").split("\n", 1)
+    student_cfg = tomllib.loads("\n".join(json.loads(student)))
+    teacher_cfg = tomllib.loads("\n".join(json.loads(teacher)))
+    student_policy = student_cfg["permissions"]["forgekernel"]
+    assert student_cfg["web_search"] == "disabled"
+    assert student_policy["network"]["enabled"] is False
+    assert student_policy["filesystem"][str(ref)] == "deny"
+    assert student_policy["filesystem"][str(teacher_tree)] == "deny"
+    assert teacher_cfg["permissions"]["forgekernel"]["filesystem"][str(policy.repo_root)] == "write"
+    assert student_cfg["model_reasoning_effort"] == "high"
+    assert prompt.endswith("STUDENT PROMPT")
+    assert (ws / ".agents/skills/ncu-trace/SKILL.md").is_file()
+    assert not (ws / ".claude").exists()
+    monkeypatch.setenv("FK_TEST_CODEX_FAIL", "1")
+    rc, out, err = be._agent_turn(cmd, "FAILED PROMPT", "teacher")
+    assert rc == 1 and not out and "Test turn failed" in err
+
+
 # -- the hook ----------------------------------------------------------------------------
 
 POLICY = {"role": "teacher", "oracle_mode": "blackbox", "offline": False,

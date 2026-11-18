@@ -1,10 +1,15 @@
+---
+name: job-env-check
+description: Check whether a GPU job's Python environment can run ForgeKernel profiling and evaluation tools.
+---
+
 # job-env-check
 
 Whether a GPU job's bare `python3` can run the other skills. They are started as
 `python3 notes/<tool>.py` and re-spawn `python3 eval/bench.py`, so they all need that
-interpreter to import torch; on an ssh host the job runs in a non-login shell, where
-`python3` may be the system one even though the kernel itself evaluates fine through the
-card's own interpreter.
+interpreter to import torch. Check the environment inside the GPU container. With SSH
+delivery, the job runs in a non-login shell and `python3` may resolve to a different
+interpreter from the one in the card.
 
 The driver runs it once per loop start (`python3 notes/job_env_check.py`). It prints exactly
 one line, `JOB-ENV-OK python3=<path> torch=<version>` or

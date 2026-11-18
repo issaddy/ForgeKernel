@@ -2,8 +2,9 @@
 
 The tools the agents use, as in ForgeTrain: one directory per skill holding a `SKILL.md`
 (what it is, how an agent uses it) and its scripts. Before each agent turn the loop mirrors
-every skill into the tree the agent works in (`.claude/skills/<name>/`) and keeps it out of
-the diff via `.git/info/exclude`.
+every skill into the agent’s working tree. MyFlicker and Codex use
+`.agents/skills/<name>/`; Claude Code uses `.claude/skills/<name>/`. The loop excludes
+these copies from the git diff.
 
 GPU jobs run what is committed in a tree, so the driver also seeds the scripts a job needs
 into the tree's `notes/` and commits them there: a probe imports them bare
