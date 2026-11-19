@@ -35,9 +35,6 @@
     effort    = "xhigh"
     timeout_s = 7200                # one turn's wall clock
 
-    [agent.teacher]
-    model = "wanqing/claude-opus-5.5"
-
     [budget]
     hours           = 4             # inner-loop wall clock
     max_meta        = 3             # outer (teacher patch) rounds

@@ -183,8 +183,7 @@ onto, as in ForgeTrain: `models.toml` sets `[agent]` (`backend`, `provider`, `mo
 `timeout_s`; `[agent.teacher]` / `[agent.student]` for one agent), `loop.toml` sets `[target]`
 and `[budget]`, and `backends.toml` lists the API endpoints a `provider` other than `native`
 can name, with the key read from `local.env`. The defaults are a 1.2× target in device time,
-4 hours of loop, and 3 teacher rounds. MyFlicker uses `wanqing/claude-opus-5.5` for the
-architecture agent and `wanqing/gpt-6.1-sol` for the coding agent, both with `xhigh`.
+4 hours of loop, and 3 teacher rounds. Both MyFlicker agents default to `wanqing/gpt-6.1-sol` with `xhigh`.
 The paper's runs used
 Claude Fable 5.1 as the arch agent and Claude Opus 5 as the coding agent.
 

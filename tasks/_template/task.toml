@@ -25,9 +25,6 @@ arch     = "sm100"                   # the target GPU (sm90, sm100, ...)
 # model  = "wanqing/gpt-6.1-sol"
 # effort = "xhigh"
 
-# [agent.teacher]
-# model  = "wanqing/claude-opus-5.5"
-
 # [budget]
 # hours           = 4                # the loop's wall clock: reconnaissance, distillation, student rounds
 # max_meta        = 3                # teacher rounds that revise the milestone

@@ -78,12 +78,7 @@ ratio  = 1.2                        # multiple of the reference's speed (>1 = fa
 # ms   = 0.85                       # an absolute target (milliseconds)
 timing = "device"                   # the timing basis: device | e2e
 
-[agent.teacher]
-backend = "myflicker"
-model   = "wanqing/claude-opus-5.5"
-effort  = "xhigh"
-
-[agent.student]
+[agent]
 backend = "myflicker"
 model   = "wanqing/gpt-6.1-sol"
 effort  = "xhigh"
@@ -110,7 +105,7 @@ endpoints). The "Default" column below is what `global_config/` holds.
 | | `timing` | no | `device` | the timing basis |
 | `[agent]` (both agents), `[agent.teacher]`, `[agent.student]` (one) | `backend` | no | `myflicker` | the agent CLI, `myflicker`, `claude`, or `codex` |
 | | `provider` | no | `native` | where the tokens go: `native` = the CLI's own login state and environment; or a name from `backends.toml` |
-| | `model` | no | teacher `wanqing/claude-opus-5.5`, student `wanqing/gpt-6.1-sol` | model requested from the selected CLI |
+| | `model` | no | `wanqing/gpt-6.1-sol` | model requested from the selected CLI |
 | | `effort` | no | `xhigh` for both roles | reasoning effort |
 | | `timeout_s` | no | student 7200; teacher 14400 | one turn's wall-clock limit |
 | `[budget]` | `hours` | no | `4` | the inner loop's wall clock |

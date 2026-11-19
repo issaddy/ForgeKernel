@@ -49,7 +49,7 @@ def test_minimal_task_takes_every_default(tmp_path):
     assert t.arch == "sm100"
     assert t.reference is None and t.mode == task_mod.MODE_GENERATE
     assert t.target.ratio == 1.2 and t.target.ms is None and t.target.timing == "device"
-    assert (t.teacher.backend, t.teacher.model, t.teacher.effort) == ("myflicker", "wanqing/claude-opus-5.5", "xhigh")
+    assert (t.teacher.backend, t.teacher.model, t.teacher.effort) == ("myflicker", "wanqing/gpt-6.1-sol", "xhigh")
     assert (t.student.backend, t.student.model, t.student.effort) == ("myflicker", "wanqing/gpt-6.1-sol", "xhigh")
     assert (t.budget.hours, t.budget.max_meta, t.budget.reference_hours) == (4.0, 3, 8.0)
     assert [s.name for s in t.shapes] == ["small", "large"]

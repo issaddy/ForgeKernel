@@ -16,8 +16,7 @@ the container.
    `FK_GPU` to the CUDA device index visible in the container. For H800, use
    `arch = "sm90"` in `task.toml`.
 
-The defaults are `wanqing/claude-opus-5.5` for the architecture agent and
-`wanqing/gpt-6.1-sol` for the coding agent, both with `xhigh`. The native
+Both agents default to `wanqing/gpt-6.1-sol` with `xhigh`. The native
 provider uses the account configured in MyFlicker. Override the model or effort
 in the task's `[agent]`, `[agent.teacher]`, or `[agent.student]` settings.
 

@@ -10,5 +10,4 @@ effort    = "xhigh"
 timeout_s = 7200            # one student turn is one iteration
 
 [agent.teacher]
-model     = "wanqing/claude-opus-5.5"
 timeout_s = 14400           # reconnaissance, distillation and diagnosis run for hours
