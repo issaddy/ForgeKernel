@@ -88,7 +88,7 @@ assert pathlib.Path('turn/sid').read_text().strip() == sid
 pathlib.Path('report').write_text('checked report')
 pathlib.Path('evaluated').touch()
 print(json.dumps({{'type': 'result', 'subtype': 'success', 'session_id': sid}}), flush=True)
-assert not sys.stdin.read(), 'the controller sent another turn after acceptance'
+pathlib.Path('after-acceptance').write_text(sys.stdin.read())
 """, encoding="utf-8")
     agent.chmod(0o755)
     sandbox = tmp_path / "bwrap"
@@ -124,6 +124,7 @@ assert not sys.stdin.read(), 'the controller sent another turn after acceptance'
     assert result.returncode == 0, result.stderr
     assert result.stdout == "checked report"
     assert sid_file.read_text().strip() == "abcd1234"
+    assert (workspace / "after-acceptance").read_text() == ""
 
 
 def test_reference_turn_obeys_deadline_when_cli_stops_reading(tmp_path, monkeypatch):

@@ -1,11 +1,11 @@
-"""No reference to distil from: generate one with a ``/goal`` session, then run as usual.
+"""No reference to distil from: generate one in an agent session, then run as usual.
 
 A source-mode run distils its milestone from an oracle — the source of a kernel that already
 does what the student is asked to reproduce. A card that has none (a leaderboard card
 scaffolded without ``--sealed-ref`` / ``--binary-ref``, a hand-made card whose loop.toml
 names no ``oracle``) had nothing to distil from: ``_has_distillation_input`` said no, the
 teacher never ran, and the student started against whatever milestone was on disk — on a
-fresh card, none. The agent uses its native ``/goal`` in tmux to write and evaluate a kernel
+fresh card, none. The agent session writes and evaluates a kernel
 on the card's harness. ForgeKernel re-measures the best correct candidate and uses it as
 the oracle. The teacher then distils milestone v1 from it and the student starts from the
 card's stub as in every source-mode run.
@@ -1419,7 +1419,7 @@ def _accepted(g: Generation, state: dict, svc: Service, cand: dict, runs: list,
     reply = Path(state.get("reply") or "")
     if reply.is_file() and reply.read_text(encoding="utf-8", errors="replace").strip():
         notes = paths.reference / "NOTES.md"
-        notes.write_text("# Report of the /goal session that wrote this reference\n\n"
+        notes.write_text("# Report of the session that wrote this reference\n\n"
                          + reply.read_text(encoding="utf-8", errors="replace"), encoding="utf-8")
         files.append(str(notes))
     best = min(runs, key=lambda r: r["reading_ms"])

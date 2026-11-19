@@ -18,7 +18,7 @@ A run, in order (each step is skipped on resume once it is done):
   3. calibration with a reference: the reference against the judge on the GPU, on every
                  input group of every shape; a disagreement goes back to step 1 with the
                  numbers, an agreement freezes the tolerance. Without one the tolerance is
-                 the dtype floor, and the /goal session that writes the reference is held
+                 the dtype floor, and the session that writes the reference is held
                  to it.
   4. the loop    loop.toml from the task, the student's workspace, the agent commands --
                  then the two-layer loop (forgekernel.loop.cli), which resumes itself from
