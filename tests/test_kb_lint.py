@@ -62,6 +62,14 @@ def test_derive_reference_tokens_from_oracle_tree(tmp_path):
     assert derive_reference_tokens(tmp_path / "missing") == []
 
 
+def test_generic_oracle_filename_does_not_flag_repository_tool(tmp_path):
+    (tmp_path / "run.py").write_text("def run(x):\n    return x\n")
+
+    tokens = derive_reference_tokens(tmp_path)
+
+    assert not lint_text("Measured with `lever_pricing_run.py`.", extra_tokens=tokens)
+
+
 def test_line_ref_without_source_flagged():
     findings = lint_text("- order of the steady-state body: `some_fn` L1410-1477\n", "e.md")
     assert findings and "line-number citation" in findings[0]
