@@ -15,7 +15,7 @@
     language = "cutedsl"            # cutedsl | cuda
     arch     = "sm100"              # target GPU; also picks hw_kb/<language>/<arch>/
 
-    [reference]                     # leave the whole table out: a /goal session writes one
+    [reference]                     # omit this table to generate a reference first
     run    = "reference/run.py:run" # the callable the harness times and checks against
     source = "reference/src"        # given: the teacher reads it (source mode); omitted: blackbox
     # blackbox = true               # source on disk, withheld from the teacher anyway
@@ -89,7 +89,7 @@ MIN_INPUT_GROUPS = 3
 
 MODE_SOURCE = "source"
 MODE_BLACKBOX = "blackbox"
-MODE_GENERATE = "generate"   # no reference: a /goal session writes one, then source mode
+MODE_GENERATE = "generate"   # generate the reference, then enter source mode
 MODE_LEADERBOARD = "leaderboard"   # one board problem: the board's judge, inputs and clock
 
 # A leaderboard task (`forge init <op> --leaderboard ...`) carries the card generated from
@@ -284,7 +284,7 @@ def load_task(task_dir: str | Path, *, kb_root: Path | None = None,
     if board is not None:
         notes.append(f"{board.suite} problem: the board's judge, inputs and clock")
     elif reference is None:
-        notes.append("no [reference]: a /goal session writes one first "
+        notes.append("no [reference]: ForgeKernel generates one first "
                      f"(budget {budget.reference_hours:g} h)")
     for s in shapes:
         if s.groups_to_add:

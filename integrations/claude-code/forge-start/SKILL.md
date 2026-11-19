@@ -95,7 +95,7 @@ Settle whom the user wants to beat first, then decide source visibility:
 - Production optimization: prefer the user's current implementation.
 - Beating an expert library: choose a concrete implementation compatible in semantics, precision, shapes and target GPU; record its source and version, and never automatically pick whatever the web claims is fastest. Verify sources when searching.
 - PyTorch only: usable as the initial reference, but never describe beating PyTorch as beating an expert kernel.
-- No reference at all: the generation flow uses the selected backend's native `/goal` in tmux and has a separate reference budget. MyFlicker 2.0.36 paused or blocked on the native Goal evaluator in local testing. Confirm the Goal flow is usable with the installed version, or use a supplied reference for the initial run.
+- No reference at all: `forge run` generates one within the separate reference budget. ForgeKernel drives MyFlicker with stream-JSON turns in one session. Claude and Codex use their native `/goal` in tmux.
 
 When the source is readable and the teacher may read it: `reference.run` + `reference.source`, source mode. With only a callable entry point, or when the source may not be read: write only `run`, or set `blackbox = true` as the task conventions say. Never expose reference source to the student or bypass the harness's isolation.
 

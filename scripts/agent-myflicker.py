@@ -98,17 +98,17 @@ def main():
         settings["permissions"]["deny"].extend([f"Read(/{auth})", f"Read(/{auth}/**)"])
         goal = os.environ.get("FK_AGENT_DRIVER") == "goal"
         if goal:
-            settings.update(goal=True, appendSystemPrompt=prompt)
+            settings.update(goal=False, appendSystemPrompt=prompt)
         settings_path = directory / "config.json"
         settings_path.write_text(json.dumps(settings), encoding="utf-8")
         cmd.extend(("--config", str(settings_path)))
         if goal:
-            return run_goal(cmd, Path(sys.argv[4]), directory, auth)
+            return run_goal(cmd, Path(sys.argv[4]))
         return run_turn(cmd, int(timeout), prompt, directory)
 
 
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except (KeyError, OSError, ValueError, subprocess.CalledProcessError) as exc:
+    except (KeyError, OSError, ValueError, subprocess.SubprocessError) as exc:
         sys.exit(f"agent-myflicker: {exc}")

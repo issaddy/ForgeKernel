@@ -31,10 +31,11 @@ Run the `forge run` command printed by `forge new`. Use `forge status` with the
 same run directory to see progress. Repeat the original `forge run` command to
 resume. Run state and reports live in the checkout's `.artifacts/` directory.
 
-RMSNorm includes a PyTorch reference. Tasks that generate their own reference
-use native `/goal` in tmux. In local tests with MyFlicker 2.0.36, the evaluator
-paused or blocked even after the CLI recorded valid tool output. Supply a
-reference for the initial container run to use the ordinary turn path.
+RMSNorm includes a PyTorch reference. For tasks without a reference, use a MyFlicker
+version that accepts `--input-format stream-json`. ForgeKernel sends each round
+to the same MyFlicker session, checks the report and GPU results, and sends the
+check feedback if another round is needed. Start these tasks with the same
+`forge run` command. They use the configured reference-generation budget.
 
 ## Use the shared startup skill
 

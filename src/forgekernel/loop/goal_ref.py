@@ -1258,7 +1258,7 @@ def _run_session(g: Generation, state: dict, svc: Service, ws: Path, task: str) 
         k = len(attempts) + 1
         out_p = paths.session / f"attempt-{k:02d}.out"
         err_p = paths.session / f"attempt-{k:02d}.err"
-        g.log(f"attempt {k}: starting the /goal session ({remaining // 60} min to the deadline)")
+        g.log(f"attempt {k}: starting the reference session ({remaining // 60} min to the deadline)")
         rec = {"n": k, "start": now}
         attempts.append(rec)
         save_state(g.op_dir, state)

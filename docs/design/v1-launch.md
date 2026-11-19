@@ -462,8 +462,9 @@ Trade-offs made in implementation, and where the result departs from the text ab
    pricing, stall and the timeline, read `meta_workloads`, which now lists every shape.
 7. **Agent commands**: built in `src/forgekernel/agents.py`. For regular turns, MyFlicker
    reads text from stdin and returns streaming JSON. Claude uses `claude -p`, and Codex uses
-   `codex exec`. Reference generation uses each backend's native `/goal` in tmux. Local tests
-   with MyFlicker 2.0.36 observed Goal evaluation and state update failures. See the
+   `codex exec`. For reference generation, Claude and Codex use native `/goal` in tmux.
+   ForgeKernel drives MyFlicker through successive stream-JSON turns in one session,
+   using the same reference budget and deliverable check. See the
    [container guide](../../integrations/myflicker/README.md).
 8. **Self-evolution**: `scripts/self_evolve.py`. Only `cutedsl` tasks for now (the next generation's
    reference is sealed as Python source).

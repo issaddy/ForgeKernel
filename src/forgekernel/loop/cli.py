@@ -149,8 +149,7 @@ def _end_process_group(proc: subprocess.Popen, grace_s: float = 8.0) -> None:
 
 
 
-# FK_AGENT_DRIVER=goal selects the launcher's interactive tmux driver.
-# The Claude launcher delegates that mode to scripts/claude-goal.sh.
+# FK_AGENT_DRIVER=goal selects the launcher's reference-generation driver.
 _GOAL_DRIVER_MARK = "claude-goal"
 
 
@@ -1857,7 +1856,7 @@ def _goal_ref_agent_problem(args) -> str | None:
         return f"could not inspect the agent command ({e})"
     if found:
         return ("the reference session needs a goal-capable agent command "
-                "(ForgeKernel Claude or Codex launcher): " + "; ".join(found))
+                "(ForgeKernel Claude, Codex or MyFlicker launcher): " + "; ".join(found))
     return None
 
 
@@ -2188,8 +2187,7 @@ def _main(argv: list[str] | None = None) -> int:
                         "reconnaissance of the reference instead; 'none' does not distill. "
                         "Default: loop.toml [loop].oracle_mode, else source")
     p.add_argument("--ref-from-goal", default=None, choices=[None, *goal_ref_mod.MODES],
-                   help="no reference to distil from: first generate one with a /goal "
-                        "session on the card's own harness and use it as the oracle "
+                   help="generate a reference on the card's own harness and use it as the oracle "
                         "(loop/goal_ref.py). 'auto' = when a source-mode run has no oracle and "
                         "no milestone; 'always' = on every source-mode run; 'off' = never. "
                         "Default: loop.toml [loop].ref_from_goal, else auto")
@@ -2405,7 +2403,7 @@ def _main(argv: list[str] | None = None) -> int:
               f"{goal_arch['why']}", flush=True)
     elif goal_plan.runs_session:
         print(f"[loop] ref_from_goal = {goal_mode} ({goal_mode_src}): {goal_plan.why} — "
-              f"a /goal session generates the reference first "
+              f"the agent generates the reference first "
               f"({goal_settings.hours:g} h budget)", flush=True)
     language = _resolve_language(args.language, cfg, args.kernel_file)
     language_problem = lang_mode.language_problem(language, args.kernel_file)
@@ -2969,7 +2967,7 @@ def _main(argv: list[str] | None = None) -> int:
         if goal_plan.runs_session:
             bar = goal_ref_mod.resolve_bar(cfg, op_dir, target_ms=args.target_ms,
                                            ratio=goal_settings.ratio, gate_window=gate_window)
-            print(f"                 a /goal session ({goal_settings.hours:g} h, jobs via "
+            print(f"                 a reference session ({goal_settings.hours:g} h, jobs via "
                   f"operators/{goal_ref_mod.tree_op(args.op)}) writes the oracle; speed bar: "
                   f"{bar['text']}; then {goal_settings.accept_runs} acceptance run(s)")
             if (why := _goal_ref_agent_problem(args)) is not None:

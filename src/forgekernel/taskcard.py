@@ -311,7 +311,7 @@ def write_loop_toml(run, task, op_dir: Path, *, deny: list[str], ncu: bool = Tru
     if task.mode == MODE_GENERATE:
         lines += [
             'oracle_mode = "source"',
-            'recon_op    = ""            # no reference yet: a /goal session writes one',
+            'recon_op    = ""            # generate a reference first',
             'ref_from_goal = "auto"',
             f'ref_shape   = {json.dumps(shapes)}',
             f'ref_hardware = "{task.arch}"',
