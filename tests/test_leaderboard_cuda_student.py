@@ -108,15 +108,25 @@ def test_export_is_the_boards_cuda_cpp_solution_with_the_cards_flags(base, sol_r
     (card / "kernel.cu").write_text(STUDENT)
     sol = lb.export_solution(card, name="s", author="a")
     assert sol["spec"]["languages"] == ["cuda_cpp"] and sol["spec"]["entry_point"] == "kernel.cu::run"
+    assert sol["spec"]["target_hardware"] == ["B200"]
     assert sol["spec"]["compile_options"] == {"cuda_cflags": [
         "-O3", "--use_fast_math", "-Xptxas=-v", "-lineinfo", "-gencode=arch=compute_100a,code=sm_100a"]}
     assert sol["sources"] == [{"path": "kernel.cu", "content": STUDENT}]
+    path = card / "eval" / "leaderboard" / "problem.json"
+    problem = json.loads(path.read_text())
+    problem["cuda_arch"] = "sm_120a"
+    path.write_text(json.dumps(problem))
+    sm120 = lb.export_solution(card, name="s", author="a", hardware="RTX PRO 5000")
+    assert sm120["spec"]["compile_options"]["cuda_cflags"][-1] == "-gencode=arch=compute_120a,code=sm_120a"
+    assert sm120["spec"]["target_hardware"] == ["RTX PRO 5000"]
+    assert lb.export_solution(card, name="s", author="a")["spec"]["target_hardware"] == ["sm_120a"]
 
 
 def test_the_card_builds_with_the_flags_export_writes(card_lb) -> None:
     lbm, problem, card, module = card_lb
     for src in (STUDENT, "int x;\n", "// fk-cuda-cflags: -arch=sm_100a\n"):
         assert lbm.cuda_kernel_flags(src) == lb.cuda_kernel_flags(src)
+        assert lbm.cuda_kernel_flags(src, "sm_120a") == lb.cuda_kernel_flags(src, "sm_120a")
     assert lbm.CUDA_DEFAULT_CFLAGS == lb.CUDA_DEFAULT_CFLAGS and lbm.CUDA_GENCODE == lb.CUDA_GENCODE
     with pytest.raises(ValueError, match="not allowed"):
         lbm.cuda_kernel_flags("// fk-cuda-cflags: -Xlinker ../ref_bin/x.so\n")
@@ -144,6 +154,9 @@ def test_the_card_loads_a_cuda_kernel_through_the_board_build(card_lb, monkeypat
     assert seen["name"].startswith("fk_kernel_") and seen["is_python_module"] is True
     built = Path(seen["sources"][0])
     assert built.read_text() == STUDENT and built.parent.parent == card.parent / "build"
+    problem["cuda_arch"] = "sm_120a"
+    lbm._impl(problem, "kernel")
+    assert seen["extra_cuda_cflags"][-1] == "-gencode=arch=compute_120a,code=sm_120a"
 
 
 @pytest.mark.parametrize("src, fenced", [

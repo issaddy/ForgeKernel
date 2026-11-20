@@ -73,9 +73,11 @@ Planned for **ForgeKernel v1.5**:
 
 ## Quick Start in a GPU container
 
-Enter a Linux container with an NVIDIA Hopper (`sm90`) or Blackwell (`sm100`) GPU
-and clone this repository there. The default setup runs ForgeKernel, the authenticated
-MyFlicker CLI, and GPU jobs in that container.
+Enter a Linux container with an NVIDIA GPU and clone this repository there. CuTe DSL tasks
+have architecture knowledge bases for [Hopper (`sm90`)](hw_kb/cutedsl/sm90/index.md),
+[Blackwell (`sm100`)](hw_kb/cutedsl/sm100/index.md), and
+[Blackwell (`sm120`)](hw_kb/cutedsl/sm120/index.md). Set the task's `arch` to match the GPU.
+The default setup runs ForgeKernel, the authenticated MyFlicker CLI, and GPU jobs in that container.
 
 **1. Set up the container.** Use Python 3.11 or newer, git, CUDA PyTorch, and Bubblewrap
 (`bwrap`) with Linux namespace support. Install MyFlicker for the container's platform

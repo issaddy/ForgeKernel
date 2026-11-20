@@ -84,7 +84,7 @@ def test_the_real_trees_are_each_launchable_and_lint_clean():
     a Hopper finding it can never read, and vice versa."""
     kb = REPO / "hw_kb" / "cutedsl"
     trees = sorted(d.name for d in kb.iterdir() if d.is_dir() and (d / "index.md").is_file())
-    assert {"sm90", "sm100"} <= set(trees)
+    assert {"sm90", "sm100", "sm120"} <= set(trees)
     for arch in trees:
         assert _kb_arch_problem(kb, arch) is None
         assert lint_kb_dir(kb / arch) == [], arch
@@ -172,7 +172,7 @@ def test_every_index_row_marked_verified_is_an_entry_the_lookup_certifies():
     teacher citing the index's own word must not be told the entry carries no
     certification. Checked on the status cell, not the whole row -- a transcribed
     row may quote the phrase for one sub-claim."""
-    for arch in ("sm90", "sm100"):
+    for arch in ("sm90", "sm100", "sm120"):
         index = (REPO / "hw_kb" / "cutedsl" / arch / "index.md").read_text(encoding="utf-8")
         seen = 0
         for row in index.splitlines():

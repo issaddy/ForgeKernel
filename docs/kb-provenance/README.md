@@ -4,10 +4,8 @@
 > student's L0 readable list holds only the knowledge base itself (`hw_kb/cutedsl/`, `hw_kb/cuda/`), and the
 > teacher's inputs do not include it either. The reasons follow.
 >
-> **In this release the directory holds only this file.** The provenance records and certification
-> probes of the entries that ship with the knowledge base are not included; each entry keeps its
-> certification status and readings. The runs you start write their provenance here as described
-> below.
+> The [SM120 archive](sm120/) holds complete-operator validation records and their probes.
+> Knowledge-base entries carry their own certification status and mechanism-level readings.
 
 ## Why it is kept apart
 

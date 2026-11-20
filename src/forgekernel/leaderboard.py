@@ -705,13 +705,13 @@ def is_cuda_kernel_file(kernel_file: str) -> bool:
     return Path(kernel_file).suffix in CUDA_KERNEL_SUFFIXES
 
 
-def cuda_kernel_flags(src: str) -> list[str]:
+def cuda_kernel_flags(src: str, arch: str | None = None) -> list[str]:
     """The nvcc flags the card builds a CUDA kernel file with (no allow-list check here: the
     card's fence refuses a disallowed flag before a build)."""
     extra = [f for line in CUDA_FLAGS_LINE.findall(src) for f in line.split()]
     flags = CUDA_DEFAULT_CFLAGS + [f for f in extra if f not in CUDA_DEFAULT_CFLAGS]
     if not any(f.startswith(("-gencode", "-arch")) for f in flags):
-        flags.append(CUDA_GENCODE)
+        flags.append(f"-gencode=arch=compute_{arch[3:]},code={arch}" if arch else CUDA_GENCODE)
     return flags
 
 
@@ -1419,10 +1419,12 @@ def signature_findings(kernel_src: str, problem: dict) -> list[str]:
 
 
 def export_solution(op_dir: Path, *, name: str, author: str, language: str | None = None,
-                    description: str | None = None, hardware: str = "B200") -> dict:
+                    description: str | None = None, hardware: str | None = None) -> dict:
     """The suite's solution JSON for this card's kernel.py."""
     op_dir = Path(op_dir)
     problem = json.loads((op_dir / PROBLEM_FILE).read_text(encoding="utf-8"))
+    if hardware is None:
+        hardware = problem.get("cuda_arch", "B200")
     kfile = problem.get("kernel_file", "kernel.py")
     src = (op_dir / kfile).read_text(encoding="utf-8")
     if (bad := signature_findings(src, problem)):
@@ -1444,7 +1446,7 @@ def export_solution(op_dir: Path, *, name: str, author: str, language: str | Non
                 "entry_point": entry, "destination_passing_style": dps,
                 "dependencies": sol_deps}
         if cuda:  # the flags the card built it with (SOL resolves ld_flags to -lcuda)
-            spec["compile_options"] = {"cuda_cflags": cuda_kernel_flags(src)}
+            spec["compile_options"] = {"cuda_cflags": cuda_kernel_flags(src, problem.get("cuda_arch"))}
     return {"name": name, "definition": problem["definition"]["name"], "author": author,
             "description": desc, "spec": spec, "sources": sources}
 
@@ -1469,7 +1471,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--author", default="forgekernel", help="export: solution author")
     p.add_argument("--language", default=None, choices=sorted(_EXPORT_LANG),
                    help="export: override the inferred language")
-    p.add_argument("--hardware", default="B200", help="export: target hardware")
+    p.add_argument("--hardware", help="export: target hardware")
     args = p.parse_args(argv)
 
     ops = Path(args.base_dir) / "operators" if args.base_dir else operators_dir()

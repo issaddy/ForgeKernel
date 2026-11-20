@@ -88,6 +88,8 @@ def card_problem(task, check, *, reference_impl: dict | None = None,
         "source": {"task": task.name, "upstream": "forgekernel task",
                    "dataset": "the task's own shapes and input groups"},
     }
+    if task.language == "cuda" and task.arch != "sm100":
+        out["cuda_arch"] = CUTE_ARCH.get(task.arch, task.arch + "a")
     if len(workloads) > 1:
         out["group"] = [{"index": i, "name": w["uuid"], "workload": w}
                         for i, w in enumerate(workloads)]

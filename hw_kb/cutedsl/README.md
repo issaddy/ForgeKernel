@@ -35,6 +35,10 @@ hw_kb/cutedsl/
   sm100/
     index.md         # SM100 (Blackwell) list; the entry point is the "look up by symptom first" table
     <interface>.md
+  sm120/
+    index.md         # SM120 (compute capability 12.0) interface list
+    <interface>.md
+    probes/          # runnable examples used to certify the entries
 ```
 
 **One tree per architecture; there is no shared tree.** An entry belongs to a tree by **what it depends

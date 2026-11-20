@@ -432,7 +432,7 @@ CUDA_FLAG_OK = re.compile(
     r"|--?default-stream=(legacy|null|per-thread)|-Xcompiler=-O[0-3]|-w|-Wno-[-\w]+")
 
 
-def cuda_kernel_flags(src: str) -> list[str]:
+def cuda_kernel_flags(src: str, arch: str | None = None) -> list[str]:
     """nvcc flags of a CUDA kernel file: SOL's defaults, the file's fk-cuda-cflags, the arch.
     Raises ValueError on a flag outside CUDA_FLAG_OK."""
     extra = [f for line in CUDA_FLAGS_LINE.findall(src) for f in line.split()]
@@ -441,11 +441,11 @@ def cuda_kernel_flags(src: str) -> list[str]:
                          f"flags only: no paths, libraries or linker options)")
     flags = CUDA_DEFAULT_CFLAGS + [f for f in extra if f not in CUDA_DEFAULT_CFLAGS]
     if not any(f.startswith(("-gencode", "-arch")) for f in flags):
-        flags.append(CUDA_GENCODE)
+        flags.append(f"-gencode=arch=compute_{arch[3:]},code={arch}" if arch else CUDA_GENCODE)
     return flags
 
 
-def load_cuda_entry(path: Path, entry: str):
+def load_cuda_entry(path: Path, entry: str, arch: str | None = None):
     """``entry`` of a CUDA C++ kernel file, built as SOL-ExecBench builds a cuda_cpp solution
     (see CUDA_KERNEL_SUFFIXES). The build is keyed by the source and the flags, so an
     unchanged file loads the module already built in this job's build directory."""
@@ -454,7 +454,7 @@ def load_cuda_entry(path: Path, entry: str):
     import torch.utils.cpp_extension as ext
     path = Path(path).resolve()
     src = path.read_text(encoding="utf-8")
-    flags = cuda_kernel_flags(src)
+    flags = cuda_kernel_flags(src, arch)
     # A profiling run that maps SASS back to source lines (the stall ledger) builds with
     # -lineinfo: its own build under its own prefix, so the timed build and the census /
     # SASS-sha readers (orch_census_run.find_cuda_build: fk_kernel_*) never load it.
@@ -1019,8 +1019,11 @@ def _impl(problem: dict, which: str):
     card = Path(problem["_dir"]).parent.parent
     if which == "kernel":
         kpath = card / problem.get("kernel_file", "kernel.py")
-        load = load_cuda_entry if kpath.suffix in CUDA_KERNEL_SUFFIXES else load_entry
-        return load(kpath, problem.get("entry", "run")), bool(problem.get("dps", True))
+        entry = problem.get("entry", "run")
+        dps = bool(problem.get("dps", True))
+        if kpath.suffix in CUDA_KERNEL_SUFFIXES:
+            return load_cuda_entry(kpath, entry, problem.get("cuda_arch")), dps
+        return load_entry(kpath, entry), dps
     ref = problem.get("reference_impl") or {"kind": "definition"}
     if which == "definition" or ref.get("kind") == "definition":
         return reference_callables(problem)[0], False

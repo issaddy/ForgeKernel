@@ -4,7 +4,7 @@
 
 [task]
 language = "cutedsl"
-arch     = "sm100"                   # sm90 for Hopper
+arch     = "sm100"                   # match the GPU: sm90, sm100, or sm120
 
 [reference]
 run    = "reference/run.py:run"      # the callable timed beside the kernel

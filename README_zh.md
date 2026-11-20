@@ -64,9 +64,12 @@ ForgeKernel 属于 **Forge 家族**，同一家族的项目还有
 
 ## 在 GPU 容器中快速开始
 
-进入能看到 NVIDIA Hopper（`sm90`）或 Blackwell（`sm100`）GPU 的 Linux 容器，
-在容器内克隆本仓库。默认情况下，ForgeKernel、已登录的 MyFlicker CLI 和 GPU 作业
-都在这个容器内运行。
+在能看到 NVIDIA GPU 的 Linux 容器内克隆本仓库。CuTe DSL 任务可使用
+[Hopper（`sm90`）](hw_kb/cutedsl/sm90/index.md)、
+[Blackwell（`sm100`）](hw_kb/cutedsl/sm100/index.md)和
+[Blackwell（`sm120`）](hw_kb/cutedsl/sm120/index.md)的架构知识库。
+将任务的 `arch` 设为实际 GPU 的架构。默认情况下，ForgeKernel、已登录的 MyFlicker CLI
+和 GPU 作业都在这个容器内运行。
 
 **1. 准备环境。** 容器需要 Python 3.11 或更新版本、git、CUDA 版 PyTorch，以及支持
 Linux 命名空间的 Bubblewrap（`bwrap`）。安装适合容器平台的 MyFlicker CLI 并在容器内

@@ -184,8 +184,15 @@ def _run_with_check(repo, toml=REF_TOML, **kw):
     return run, task, judge_mod.load_check(run.dir / judge_mod.CHECK_DIR)
 
 
-def test_write_card_generates_a_committed_task_card(repo):
-    run, task, check = _run_with_check(repo)
+@pytest.mark.parametrize(("language", "arch", "target"), [
+    ("cutedsl", "sm100", "sm_100a"),
+    ("cutedsl", "sm120", "sm_120a"),
+    ("cuda", "sm100", "sm_100a"),
+    ("cuda", "sm120", "sm_120a"),
+])
+def test_write_card_generates_a_committed_task_card(repo, language, arch, target):
+    toml = REF_TOML.replace('"sm100"', f'"{arch}"').replace('"cutedsl"', f'"{language}"')
+    run, task, check = _run_with_check(repo, toml=toml)
     op_dir = taskcard.write_card(run, task, check, load_machine(repo, environ={}))
     assert op_dir == run.operators_dir / "rmsnorm"
     problem = json.loads((op_dir / taskcard.PROBLEM).read_text())
@@ -194,12 +201,19 @@ def test_write_card_generates_a_committed_task_card(repo):
     assert [g["name"] for g in problem["workload"]["input_groups"]] == ["plain", "spiky", "tiny"]
     assert problem["definition"]["reference"] == JUDGE
     assert problem["time_reference"] is False
-    stub = (op_dir / "kernel.py").read_text()
-    assert "def run(x, w):" in stub and "small" in stub and "large" in stub
+    stub = (op_dir / problem["kernel_file"]).read_text()
+    assert "small" in stub and "large" in stub
+    if language == "cuda":
+        assert problem["kernel_file"] == "kernel.cu"
+        assert problem.get("cuda_arch") == (target if arch == "sm120" else None)
+        assert 'm.def("run", &run)' in stub
+    else:
+        assert problem["kernel_file"] == "kernel.py" and "def run(x, w):" in stub
     entry = (op_dir / "gpu_entry.sh").read_text()
-    assert "calibrate)" in entry and 'CUTE_DSL_ARCH:-sm_100a' in entry
+    assert "calibrate)" in entry and f"CUTE_DSL_ARCH:-{target}" in entry
     sub = tomllib.loads((op_dir / "submit.toml").read_text())
     assert sub["repo"]["delivery"] == "local" and sub["exec"]["gpu"] == "0"
+    assert sub["env"]["CUTE_DSL_ARCH"] == target
     assert _git(op_dir, "status", "--porcelain") == ""
     assert _git(op_dir, "rev-parse", "--abbrev-ref", "HEAD").strip() == "main"
 

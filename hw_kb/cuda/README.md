@@ -28,6 +28,10 @@ hw_kb/cuda/
   sm100/
     index.md         # SM100 (Blackwell) list; the entry point is the "Look up by symptom first" table
     <interface>.md
+  sm120/
+    index.md         # SM120 (compute capability 12.0) interface list
+    <interface>.md
+    probes/          # standalone nvcc verification programs
 ```
 
 **One tree per architecture.** `kb_arch` comes from `[loop] kb_arch` in `operators/<op>/loop.toml` (or
