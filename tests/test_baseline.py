@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -250,6 +251,53 @@ class _FakeBackend:
 def _patch_backend(monkeypatch, fake):
     import forgekernel.loop.cli as loop_cli
     monkeypatch.setattr(loop_cli, "RealBackend", lambda *a, **k: fake)
+
+
+def test_baseline_resume_is_scoped_to_the_submission_tree(monkeypatch, tmp_path):
+    from forgekernel.loop import cli
+    from forgekernel.paths import OPERATORS_ENV
+
+    checkout = tmp_path / "checkout"
+    checkout_git = checkout / ".git"
+    checkout_git.mkdir(parents=True)
+    monkeypatch.chdir(checkout)
+    monkeypatch.setattr(cli.RealBackend, "_branch_sha", lambda self, branch: "abc")
+
+    def record(git_dir, job):
+        path = git_dir / "fk-inflight.json"
+        path.write_text(json.dumps(
+            {"job": job, "branch": "HEAD", "mode": "sealref", "sha": "abc"}))
+        return path
+
+    shared = record(checkout_git, "101")
+    calls = []
+
+    def fake_forge(op, verb, *args):
+        assert op == "_demo_ref"
+        calls.append((verb, args))
+        if verb == "submit":
+            return SimpleNamespace(stdout="[submit] job=103\n")
+        if verb == "status":
+            return SimpleNamespace(stdout='{"status": "Succeeded"}\n')
+        return SimpleNamespace(returncode=0, stdout='{"median_ms": 2.36}\n')
+
+    monkeypatch.setattr(cli, "_forge", fake_forge)
+
+    first_ops = tmp_path / "first" / "operators"
+    first_git = first_ops / "_demo_ref" / ".git"
+    first_git.mkdir(parents=True)
+    own = record(first_git, "102")
+    monkeypatch.setenv(OPERATORS_ENV, str(first_ops))
+    assert _measure("demo", "sealref", None, repeat=1, submit_op="_demo_ref")[2] == "102"
+    assert not any(verb == "submit" for verb, _ in calls)
+    assert not own.exists()
+
+    second_ops = tmp_path / "second" / "operators"
+    (second_ops / "_demo_ref" / ".git").mkdir(parents=True)
+    monkeypatch.setenv(OPERATORS_ENV, str(second_ops))
+    assert _measure("demo", "sealref", None, repeat=1, submit_op="_demo_ref")[2] == "103"
+    assert any(verb == "submit" for verb, _ in calls)
+    assert shared.exists()
 
 
 def test_a_lost_job_is_retried(monkeypatch):

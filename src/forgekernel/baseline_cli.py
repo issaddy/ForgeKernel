@@ -225,7 +225,9 @@ def _measure(op: str, perf_mode: str, ncu_mode: str | None, *, repeat: int = 3,
     # the operator's own. The architecture reference needs one: it installs the released
     # flash-attn package and runs its own gpu_entry task, and that tree carries oracle
     # material that must never reach a student job.
-    be = RealBackend(submit_op or op, Path.cwd(), agent_cmd=None,
+    submit_op = submit_op or op
+    # Resume records and branch checks belong to the tree that submits the job.
+    be = RealBackend(submit_op, operators_dir() / submit_op, agent_cmd=None,
                      git_name="forge", git_email="forge@local")
     best_out, best_job, best_ms, samples = "", "", None, []
     parsed_runs: list[dict] = []
