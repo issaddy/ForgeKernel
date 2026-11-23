@@ -1,4 +1,4 @@
-"""Drive reference generation through ordinary turns in one MyFlicker session."""
+"""Drive reference generation through ordinary turns in one streamed session."""
 
 import json
 import os
@@ -9,9 +9,16 @@ import time
 from pathlib import Path
 
 
-def user_turn(prompt):
-    event = {"type": "user", "message": {"role": "user", "content": prompt}}
+def user_turn(prompt, backend):
+    if backend == "agy":
+        event = {"event": "user", "message": {"content": prompt}}
+    else:
+        event = {"type": "user", "message": {"role": "user", "content": prompt}}
     return (json.dumps(event) + "\n").encode()
+
+
+def agy_ok(result):
+    return result.get("status") == "SUCCESS" and not result.get("finished_reason")
 
 
 def check_deliverable(spec, deadline):
@@ -25,12 +32,12 @@ def check_deliverable(spec, deadline):
     raise ValueError(f"reference check failed: {check.stderr.strip() or output or check.returncode}")
 
 
-def drive(proc, spec, deadline, session_file, session_id):
+def drive(proc, spec, deadline, session_file, session_id, backend, prompt):
     reply = Path(spec["reply"])
-    prompt = spec["condition"]
+    prompt = "\n\n".join(filter(None, (prompt, spec["condition"])))
     if session_id:
         prompt = "Continue the reference task from the current workspace and evaluation records.\n\n" + prompt
-    pending = user_turn(prompt)
+    pending = user_turn(prompt, backend)
     stdin, stdout = proc.stdin.fileno(), proc.stdout.fileno()
     os.set_blocking(stdin, False)
     partial = b""
@@ -52,7 +59,7 @@ def drive(proc, spec, deadline, session_file, session_id):
         if not chunk:
             if reply.is_file() and check_deliverable(spec, deadline)[0]:
                 return 0
-            print("agent-myflicker: stream ended before the reference passed its check", file=sys.stderr)
+            print(f"agent-{backend}: stream ended before the reference passed its check", file=sys.stderr)
             return proc.poll() or 1
         *lines, partial = (partial + chunk).split(b"\n")
         for line in lines:
@@ -62,28 +69,39 @@ def drive(proc, spec, deadline, session_file, session_id):
                 continue
             if not isinstance(event, dict):
                 continue
-            if not session_id and (sid := event.get("session_id") or event.get("sessionId")):
+            if backend == "agy":
+                result = event.get("result") if event.get("event") == "result" else None
+                sid = event.get("conversation_id") or (result or {}).get("conversation_id")
+            else:
+                result = event if event.get("type") == "result" else None
+                sid = event.get("session_id") or event.get("sessionId")
+            if not session_id and sid:
                 session_id = sid
                 temporary = session_file.with_suffix(".tmp")
                 temporary.write_text(session_id + "\n", encoding="utf-8")
                 temporary.replace(session_file)
-            if event.get("type") != "result":
+            if result is None:
                 continue
             accepted, feedback = check_deliverable(spec, deadline)
             if accepted:
                 return 0
-            if event.get("subtype") != "success":
-                message = event.get("result") or event.get("content") or "no successful terminal result"
-                print(f"agent-myflicker: {message}", file=sys.stderr)
+            if backend == "agy":
+                success = agy_ok(result)
+                message = result.get("error") or result.get("finished_reason")
+            else:
+                success = result.get("subtype") == "success"
+                message = result.get("result") or result.get("content")
+            if not success:
+                print(f"agent-{backend}: {message or 'no successful terminal result'}", file=sys.stderr)
                 return 1
             pending = user_turn(
                 "Continue working on the reference in this session. ForgeKernel's check found:\n"
-                + feedback
+                + feedback, backend,
             )
     return 124
 
 
-def run_goal(cmd, turn_dir):
+def run_goal(cmd, turn_dir, *, backend="myflicker", prompt=""):
     seconds = float(os.environ["FK_GOAL_DEADLINE"]) - time.time()
     if seconds <= 0:
         return 124
@@ -91,14 +109,16 @@ def run_goal(cmd, turn_dir):
     spec = json.loads((turn_dir / "spec.json").read_text(encoding="utf-8"))
     session_file = Path(spec["session_id_file"])
     session_id = session_file.read_text(encoding="utf-8").strip() if session_file.is_file() else ""
-    argv = [*cmd, "-q", "--input-format", "stream-json", "--output-format", "stream-json"]
+    argv = [*cmd, "--input-format", "stream-json", "--output-format", "stream-json"]
+    if backend == "myflicker":
+        argv.append("-q")
     if session_id:
-        argv.extend(("--resume", session_id))
+        argv.extend(("--conversation" if backend == "agy" else "--resume", session_id))
     # Keep the CLI in the controller's process group so its existing timeout and
     # interruption handling also reaches the CLI and its tool processes.
     with subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE) as proc:
         try:
-            rc = drive(proc, spec, deadline, session_file, session_id)
+            rc = drive(proc, spec, deadline, session_file, session_id, backend, prompt)
             if rc == 0:
                 sys.stdout.write(Path(spec["reply"]).read_text(encoding="utf-8"))
             return rc

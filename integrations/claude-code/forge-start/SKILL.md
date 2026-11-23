@@ -1,6 +1,6 @@
 ---
 name: forge-start
-description: Configure and launch ForgeKernel in a GPU container with MyFlicker, select the reference, check the environment, and resume existing runs. Use for "launch ForgeKernel", "optimize this operator with ForgeKernel", "continue my ForgeKernel run"; a request for a design or a preflight only does not start an optimization.
+description: Configure and launch ForgeKernel in a GPU container with Antigravity CLI, select the reference, check the environment, and resume existing runs. Use for "launch ForgeKernel", "optimize this operator with ForgeKernel", "continue my ForgeKernel run"; a request for a design or a preflight only does not start an optimization.
 ---
 
 # ForgeKernel one-step launch
@@ -13,7 +13,7 @@ Find ForgeKernel in the directory the user names, or the current directory; chec
 
 Read that version's README.md (README_zh.md for Chinese), local.env.example, the task's task.toml and global_config/ first; docs/design/v1-launch.md when needed. They are the authority on configuration: this skill fixes no model, budget or dependency version, with one exception - the loop's wall-clock `hours` defaults to 24 (item 4 below).
 
-The default deployment runs ForgeKernel and the MyFlicker backend in the same Linux GPU container with `FK_DELIVERY=local`. Install this skill under `.agents/skills/` for MyFlicker or Codex, or `.claude/skills/` for Claude Code. The repository's `skills/` directory serves the internal teacher and student agents.
+The default deployment runs ForgeKernel and the Antigravity backend in the same Linux GPU container with `FK_DELIVERY=local`. Install this skill under `.agents/skills/` for MyFlicker, Antigravity CLI or Codex, or `.claude/skills/` for Claude Code. The repository's `skills/` directory serves the internal teacher and student agents.
 
 ## Collect what is missing, once
 
@@ -60,23 +60,23 @@ python3 "$SKILL_DIR/scripts/start.py" \
   --task "$TASK" --session "$SESSION_FILE"
 ```
 
-Supply `--myflicker /path/to/myflicker` or set `FK_MYFLICKER_BIN` if the installed CLI is outside PATH. With explicitly selected SSH delivery, deploy the GPU host first with `--role gpu` and run the launcher on the controller with `--role controller`. The entry point resolves each role from the task and `global_config/models.toml`, using the saved task snapshot when resuming. It prepares the selected CLIs, checks the GPU architecture, validates the task and calls `forge run`.
+Supply `--agy /path/to/agy` or set `FK_AGY_BIN` if the installed CLI is outside PATH. With explicitly selected SSH delivery, deploy the GPU host first with `--role gpu` and run the launcher on the controller with `--role controller`. The entry point resolves each role from the task and `global_config/models.toml`, using the saved task snapshot when resuming. It prepares the selected CLIs, checks the GPU architecture, validates the task and calls `forge run`.
 
 The session file holds only a task-to-run pointer; the run's state is whatever ForgeKernel says. Repeating the same command resumes the same run directory; a file lock stops two launches of one session. On failure, follow the real error, fix the environment or configuration and retry; a successful install or a `FORGE_RUN` line is no proof of acceptance. Report a full launch as passed only after observing artifacts of the actual optimization phase and evidence of GPU execution; while model networking, a hardware mismatch or the like is unresolved, label it explicitly as not accepted.
 
 ## One-step dependency deployment
 
-For dependency setup alone, run [scripts/deploy.py](scripts/deploy.py) inside the GPU container. The default controller backend is MyFlicker.
+For dependency setup alone, run [scripts/deploy.py](scripts/deploy.py) inside the GPU container. The default controller backend is Antigravity CLI.
 
 ```bash
 python3 "$SKILL_DIR/scripts/deploy.py" \
   --repo "$REPO" --env "$VENV" --role both --gpu "$GPU"
 ```
 
-Install and sign in to MyFlicker in the container before running this command. The script reuses a valid virtual environment and creates new GPU environments with access to system Python packages. If CUDA PyTorch is absent, use `--torch-spec` and an index appropriate for the image. For CuTe DSL tasks, supply `--dsl-version` when the environment needs the package installed. For a separate SSH GPU host, transfer the script and checkout there and use `--role gpu`; use `--role controller` on the controller.
+Install and sign in to Antigravity CLI in the container before running this command. The script reuses a valid virtual environment and creates new GPU environments with access to system Python packages. If CUDA PyTorch is absent, use `--torch-spec` and an index appropriate for the image. For CuTe DSL tasks, supply `--dsl-version` when the environment needs the package installed. For a separate SSH GPU host, transfer the script and checkout there and use `--role gpu`; use `--role controller` on the controller.
 
-- Online: use reachable package indexes. Supply an installed MyFlicker CLI for that backend. The script can install Codex and Claude Code with npm. For standalone controller deployment, repeat `--backend` if the roles use different CLIs. `start.py` resolves both roles automatically.
-- Offline: prepare wheels for the target OS, architecture and Python ABI (build and transitive dependencies included), transfer them and pass `--wheelhouse`. Use the installed CLIs or pass their paths through `--myflicker`, `--codex`, or `--claude`. Keep authentication on the controller.
+- Online: use reachable package indexes. Install MyFlicker or Antigravity CLI when selecting either backend. The script can install Codex and Claude Code with npm. For standalone controller deployment, repeat `--backend` if the roles use different CLIs. `start.py` resolves both roles automatically.
+- Offline: prepare wheels for the target OS, architecture and Python ABI (build and transitive dependencies included), transfer them and pass `--wheelhouse`. Use the installed CLIs or pass their paths through `--myflicker`, `--agy`, `--codex`, or `--claude`. Keep authentication on the controller.
 - A macOS controller with a Linux GPU: Linux extensions cannot be imported on macOS. Pass `--dsl-source-wheels` to start.py, listing the Linux CuTe DSL wheel and its library wheels at the GPU's version. The script unpacks them into the virtual environment's dsl-source and sets up source discovery, without importing Linux extensions on the controller; GPU extensions run on the GPU machine only.
 - `--dry-run` only prints the install plan: it runs no command and creates no directory. An install failure stops immediately; no version is swapped and no system setting changed automatically. The script's `dependencies_ready` output means only that the dependencies and their checks passed, not that authentication, the sandbox or the optimization succeeded.
 
@@ -95,7 +95,7 @@ Settle whom the user wants to beat first, then decide source visibility:
 - Production optimization: prefer the user's current implementation.
 - Beating an expert library: choose a concrete implementation compatible in semantics, precision, shapes and target GPU; record its source and version, and never automatically pick whatever the web claims is fastest. Verify sources when searching.
 - PyTorch only: usable as the initial reference, but never describe beating PyTorch as beating an expert kernel.
-- No reference at all: `forge run` generates one within the separate reference budget. ForgeKernel drives MyFlicker with stream-JSON turns in one session. Claude and Codex use their native `/goal` in tmux.
+- No reference at all: `forge run` generates one within the separate reference budget. ForgeKernel drives MyFlicker and Antigravity CLI with stream-JSON turns in one session. Claude and Codex use their native `/goal` in tmux.
 
 When the source is readable and the teacher may read it: `reference.run` + `reference.source`, source mode. With only a callable entry point, or when the source may not be read: write only `run`, or set `blackbox = true` as the task conventions say. Never expose reference source to the student or bypass the harness's isolation.
 

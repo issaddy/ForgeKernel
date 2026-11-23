@@ -293,10 +293,12 @@ class _Teacher:
         return run_agent
 
 
-@pytest.mark.parametrize("backend", ["claude", "codex", "myflicker"])
+@pytest.mark.parametrize("backend", ["agy", "claude", "codex", "myflicker"])
 def test_forge_run_drives_every_stage(repo, monkeypatch, backend):
     from forgekernel.loop import cli as loop_cli
     toml = REF_TOML
+    if backend == "myflicker":
+        toml += '\n[agent]\nbackend = "myflicker"\n'
     if backend == "codex":
         toml += '\n[agent]\nbackend = "codex"\nmodel = "gpt-6.2-sol"\n'
     if backend == "claude":
@@ -392,8 +394,8 @@ def test_forge_init_copies_the_task_template(tmp_path, monkeypatch):
     assert {p.name for p in d.iterdir()} == {"task.toml", "description.md", "shapes.json"}
     task = load_task(d, kb_root=tmp_path)
     assert task.target.ratio == 1.2 and task.mode == "generate"
-    assert task.teacher.effort == "xhigh" and task.teacher.timeout_s == 14400
-    assert task.student.effort == "xhigh" and task.student.timeout_s == 7200
+    assert task.teacher.effort == "medium" and task.teacher.timeout_s == 14400
+    assert task.student.effort == "high" and task.student.timeout_s == 7200
     assert launch.cmd_init(["gemm"]) == 2
 
 

@@ -12,6 +12,8 @@ AGENT_SCRIPT = "scripts/agent-claude.sh"
 CODEX_SCRIPT = "scripts/agent-codex.py"
 MYFLICKER_SCRIPT = "scripts/agent-myflicker.py"
 MYFLICKER_POLICY_FILE = ".agents/forgekernel-myflicker.json"
+AGY_SCRIPT = "scripts/agent-agy.py"
+AGY_POLICY_FILE = ".agents/forgekernel-agy.json"
 
 CODEX_POLICY_FILE = ".agents/forgekernel-turn.json"
 
@@ -19,7 +21,7 @@ CODEX_POLICY_FILE = ".agents/forgekernel-turn.json"
 def python_agent_script(cmd: str | None) -> str | None:
     try:
         argv = shlex.split(cmd or "")
-        return next((script for script in (CODEX_SCRIPT, MYFLICKER_SCRIPT)
+        return next((script for script in (CODEX_SCRIPT, MYFLICKER_SCRIPT, AGY_SCRIPT)
                      if str(repo_root() / script) in argv), None)
     except ValueError:
         return None
@@ -39,6 +41,8 @@ def agent_command(spec, role: str, env: dict | None = None) -> str:
         launcher = [sys.executable, str(repo_root() / CODEX_SCRIPT)]
     elif spec.backend == "myflicker":
         launcher = [sys.executable, str(repo_root() / MYFLICKER_SCRIPT)]
+    elif spec.backend == "agy":
+        launcher = [sys.executable, str(repo_root() / AGY_SCRIPT)]
     else:
         raise ValueError(f"backend {spec.backend!r} is not supported")
     grant = provider_mod.grant(spec.backend, spec.provider, env)

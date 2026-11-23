@@ -151,22 +151,50 @@ def decide(policy: dict, event: dict) -> str | None:
     return None
 
 
+def _agy_event(event: dict) -> dict:
+    call = event.get("toolCall") or {}
+    tool = call.get("name")
+    args = {key.lower(): value for key, value in (call.get("args") or {}).items()}
+    if tool == "search_web":
+        return {"tool_name": "WebSearch",
+                "tool_input": {"query": f"{args.get('query', '')} {args.get('domain', '')}"}}
+    if tool in ("read_url_content", "open_browser_url", "browser_subagent"):
+        return {"tool_name": "WebFetch", "tool_input": {"url": args.get("url") or args.get("task", "")}}
+    if tool == "run_command":
+        return {"tool_name": "Bash", "tool_input": {"command": args.get("commandline", "")}}
+    return {}
+
+
+def _reply(message: str | None, agy: bool, *, approve: bool = False) -> int:
+    if agy:
+        result = {"decision": "auto_approve" if approve else "allow"}
+        if message:
+            result = {"decision": "deny", "reason": message}
+        print(json.dumps(result))
+        return 0
+    if message:
+        sys.stderr.write(message + "\n")
+        return 2
+    return 0
+
+
 def main(argv: list[str]) -> int:
+    agy = argv[2:] == ["agy"]
     try:
         policy = json.loads(open(argv[1], encoding="utf-8").read())
     except (IndexError, OSError, ValueError) as e:
         # A policy that cannot be read must not silently allow everything.
-        sys.stderr.write(f"BLOCKED: ForgeKernel agent policy unreadable ({e})\n")
-        return 2
+        return _reply(f"BLOCKED: ForgeKernel agent policy unreadable ({e})", agy)
     try:
         event = json.loads(sys.stdin.read() or "{}")
     except ValueError:
         return 0
-    msg = decide(policy, event)
-    if msg:
-        sys.stderr.write(msg + "\n")
-        return 2
-    return 0
+    if agy:
+        # The hosted read tool can use public docs without granting shell network
+        # access. The shared hook still checks the exact reference URL.
+        approve = (event.get("toolCall") or {}).get("name") == "read_url_content"
+        return _reply(decide(policy, _agy_event(event)), True, approve=approve)
+    return _reply(decide(policy, event), False)
 
 
 if __name__ == "__main__":

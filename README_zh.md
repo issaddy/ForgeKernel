@@ -30,7 +30,7 @@ ForgeKernel 属于 **Forge 家族**，同一家族的项目还有
 ## 动态
 
 - 🛠️ **[2026-11]** 共用的 `forge-start` 技能可配置环境、启动或续跑任务。
-  见 [GPU 容器运行说明](integrations/myflicker/README.md)。
+  见 [GPU 容器运行说明](docs/design/v1-launch.md#antigravity-cli)。
 - 📄 **[2026-11]** ForgeKernel 论文发布：[arXiv:2611.04998](https://arxiv.org/abs/2611.04998)。
 - 📄 **[2026-10]** JustGoal 论文发布：[arXiv:2610.36434](https://arxiv.org/abs/2610.36434)。
 - 🏆 **[2026-10]** 我们在 NVIDIA [SOL-ExecBench](https://research.nvidia.com/benchmarks/sol-execbench)
@@ -68,13 +68,13 @@ ForgeKernel 属于 **Forge 家族**，同一家族的项目还有
 [Hopper（`sm90`）](hw_kb/cutedsl/sm90/index.md)、
 [Blackwell（`sm100`）](hw_kb/cutedsl/sm100/index.md)和
 [Blackwell（`sm120`）](hw_kb/cutedsl/sm120/index.md)的架构知识库。
-将任务的 `arch` 设为实际 GPU 的架构。默认情况下，ForgeKernel、已登录的 MyFlicker CLI
+将任务的 `arch` 设为实际 GPU 的架构。默认情况下，ForgeKernel、已登录的 Antigravity CLI
 和 GPU 作业都在这个容器内运行。
 
 **1. 准备环境。** 容器需要 Python 3.11 或更新版本、git、CUDA 版 PyTorch，以及支持
-Linux 命名空间的 Bubblewrap（`bwrap`）。安装适合容器平台的 MyFlicker CLI 并在容器内
+Linux 命名空间的 Bubblewrap（`bwrap`）。安装适合容器平台的 Antigravity CLI 并在容器内
 登录。可用时，Nsight Compute（`ncu`）用于性能分析。依赖和共用 `forge-start` 技能
-的安装方法见 [容器运行说明](integrations/myflicker/README.md)。
+的安装方法见 [容器运行说明](docs/design/v1-launch.md#antigravity-cli)。
 
 在仓库目录中，把 ForgeKernel 装到能导入 CUDA 版 PyTorch 的 Python 环境。如果 PyTorch
 已装在镜像的系统 Python 中，可以这样复用：
@@ -88,7 +88,7 @@ python -m pip install nvidia-cutlass-dsl  # RMSNorm 示例使用 CuTe DSL
 
 **2. 配置 `local.env`。** 首次配置时复制 `local.env.example`。使用 `FK_DELIVERY=local`，
 把 `FK_GPU` 设为容器内可见的 CUDA 设备编号。如果 CLI 不在 PATH 中，设置
-`FK_MYFLICKER_BIN`。
+`FK_AGY_BIN`。
 
 **3. 跑 RMSNorm 示例。** 示例使用 PyTorch 参照，默认目标是 Blackwell。使用 H800 等
 Hopper GPU 时，把示例 `task.toml` 里的 `arch` 设为 `"sm90"`。
@@ -118,6 +118,7 @@ forge new tasks/rmsnorm
 
 共用 `forge-start` 技能默认采用上述容器部署。显式切换后端时，参见
 [Claude Code](integrations/claude-code/README.md) 或 [Codex](integrations/codex/README.md)。
+使用 [MyFlicker](integrations/myflicker/README.md) 时，设置 `backend = "myflicker"`。
 如果控制端和 GPU 位于不同机器，参见 [SSH 执行方式](docs/design/v1-launch.md#9-where-it-runs)。
 
 ## 工作原理
@@ -166,7 +167,7 @@ forge new tasks/rmsnorm
 `models.toml` 定 `[agent]`（`backend`、`provider`、`model`、`effort`、`timeout_s`；`[agent.teacher]` /
 `[agent.student]` 只改一个 agent），`loop.toml` 定 `[target]` 与 `[budget]`，`backends.toml` 列出
 `provider` 不是 `native` 时可以指定的 API 端点，key 从 `local.env` 读。默认目标是 device 时间达到参照的
-1.2 倍，内层循环 4 小时，teacher 3 轮。MyFlicker 的架构和编码 agent 默认都用 `wanqing/gpt-6.1-sol`，推理强度为 `xhigh`。论文实验使用的是 Claude Fable 5.1
+1.2 倍，内层循环 4 小时，teacher 3 轮。架构和编码 agent 默认分别使用 `gemini-4-carbon-medium` 和 `gemini-4-neon-high`。论文实验使用的是 Claude Fable 5.1
 和 Claude Opus 5。
 
 ## 自进化

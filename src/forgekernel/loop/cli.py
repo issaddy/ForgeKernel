@@ -178,7 +178,7 @@ def goal_leg_findings(cmds: list[str | None], env: dict[str, str],
         if python_agent_script(cmd) or any(_GOAL_DRIVER_MARK in body for body in [cmd, *scripts_in(cmd)]):
             continue
         findings.append("agent command: does not run scripts/agent-claude.sh or "
-                        "scripts/claude-goal.sh or a ForgeKernel Codex or MyFlicker launcher")
+                        "scripts/claude-goal.sh or a ForgeKernel Codex, MyFlicker or agy launcher")
     return list(dict.fromkeys(findings))
 
 # Server-side API trouble the agent CLI surfaces as a non-zero exit: overload (529),
@@ -1856,7 +1856,7 @@ def _goal_ref_agent_problem(args) -> str | None:
         return f"could not inspect the agent command ({e})"
     if found:
         return ("the reference session needs a goal-capable agent command "
-                "(ForgeKernel Claude, Codex or MyFlicker launcher): " + "; ".join(found))
+                "(ForgeKernel Claude, Codex, MyFlicker or agy launcher): " + "; ".join(found))
     return None
 
 

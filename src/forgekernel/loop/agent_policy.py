@@ -63,7 +63,10 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from forgekernel.agents import CODEX_POLICY_FILE, MYFLICKER_POLICY_FILE, MYFLICKER_SCRIPT, python_agent_script
+from forgekernel.agents import (
+    AGY_POLICY_FILE, AGY_SCRIPT, CODEX_POLICY_FILE, MYFLICKER_POLICY_FILE, MYFLICKER_SCRIPT,
+    python_agent_script,
+)
 from forgekernel.loop import lang_mode
 from forgekernel.paths import operators_dir
 
@@ -377,6 +380,9 @@ class AgentPolicy:
         workspace = workspace.resolve()
         skills.mirror(workspace, skills.CODEX_MIRROR_RELPATH)
         _git_exclude(workspace, "/.agents/")
+        if script == AGY_SCRIPT:
+            self.install_agy(role, workspace)
+            return self.notice(role)
         if script == MYFLICKER_SCRIPT:
             settings = self.settings(role, workspace)
             policy_path = workspace / MYFLICKER_POLICY_FILE
@@ -428,6 +434,40 @@ class AgentPolicy:
                       "Hosted web search is disabled for this turn's reference URL restrictions.")
             notice += f"Codex shell commands have no network access. {access}\n\n"
         return notice
+
+    def install_agy(self, role: str, workspace: Path) -> None:
+        settings = workspace / AGY_POLICY_FILE
+        settings.write_text(json.dumps(self.agy_settings(role, workspace)), encoding="utf-8")
+        policy = settings.with_name("forgekernel-agy-hook.json")
+        policy.write_text(json.dumps(self.policy_document(role)), encoding="utf-8")
+        hooks_file = settings.with_name("hooks.json")
+        hooks = json.loads(hooks_file.read_text(encoding="utf-8")) if hooks_file.is_file() else {}
+        hooks["forgekernel-agent-policy"] = {"PreToolUse": [{
+            "matcher": "run_command|search_web|read_url_content|open_browser_url|browser_subagent",
+            "hooks": [{"type": "command",
+                       "command": shlex.join([self.hook_python, str(HOOK_SCRIPT), str(policy), "agy"])}],
+        }]}
+        hooks_file.write_text(json.dumps(hooks), encoding="utf-8")
+
+    def agy_settings(self, role: str, workspace: Path) -> dict:
+        """Translate the turn's filesystem and tool rules into Antigravity permissions."""
+        readable = dict.fromkeys([self.repo_root, *self.dsl_source_dirs,
+                                  _abs(sys.prefix), _abs(sys.base_prefix)])
+        allow = [*(f"read_file({p})" for p in readable),
+                 *(f"write_file({p})" for p in self.allow_write(role))]
+        denied = [*self._deny_paths(role, workspace), self.repo_root / "local.env",
+                  Path.home() / ".gemini"]
+        read_only = [*self._deny_write_paths(workspace), workspace / ".agents", self.repo_root / ".git"]
+        deny = ["unsandboxed(*)", "mcp(*)",
+                *(f"read_file({p})" for p in denied),
+                *(f"write_file({p})" for p in read_only)]
+        if self.no_cluster(role):
+            deny.extend(f"command({prefix})" for prefix in CLUSTER_BASH_PREFIXES)
+        if self.offline(role):
+            deny.extend(["read_url(*)", "execute_url(*)"])
+        elif not self.no_cluster(role) and not self.deny_urls(role):
+            allow.append("read_url(*)")
+        return {"toolPermission": "proceed-in-sandbox", "permissions": {"allow": allow, "deny": deny}}
 
     def install(self, role: str, workspace: Path) -> Path:
         """Write this role's settings into ``workspace`` and keep them out of git.

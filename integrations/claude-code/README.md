@@ -1,6 +1,6 @@
 # Claude Code integration
 
-ForgeKernel defaults to [MyFlicker in a GPU container](../myflicker/README.md).
+ForgeKernel defaults to [Antigravity CLI in a GPU container](../../docs/design/v1-launch.md#antigravity-cli).
 Claude Code can invoke the shared [forge-start skill](forge-start/SKILL.md) and
 can also be selected explicitly as an agent backend.
 

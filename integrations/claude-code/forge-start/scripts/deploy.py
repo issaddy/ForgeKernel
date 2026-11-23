@@ -11,7 +11,7 @@ import sys
 import tomllib
 
 AGENT_PACKAGES = {'claude': '@anthropic-ai/claude-code', 'codex': '@openai/codex'}
-BACKENDS = (*AGENT_PACKAGES, 'myflicker')
+BACKENDS = (*AGENT_PACKAGES, 'myflicker', 'agy')
 
 
 def parse_args(argv=None):
@@ -26,7 +26,7 @@ def parse_args(argv=None):
     p.add_argument('--index-url', help='Verified pip index for this machine')
     p.add_argument('--wheelhouse', type=Path, help='Offline wheel directory; disables pip indexes')
     p.add_argument('--backend', choices=BACKENDS, action='append',
-                   help='Controller backend to deploy (repeatable, defaults to MyFlicker)')
+                   help='Controller backend to deploy (repeatable, defaults to Antigravity CLI)')
     for backend in BACKENDS:
         p.add_argument(f'--{backend}', type=Path, help=f'Path to an existing {backend} executable')
     for backend in AGENT_PACKAGES:
@@ -69,12 +69,14 @@ def plan(a):
     controller = a.role in ('controller', 'both')
     gpu = a.role in ('gpu', 'both')
     backends = a.backend or [name for name in BACKENDS
-                            if getattr(a, name) or getattr(a, f'{name}_version', None)] or ['myflicker']
+                            if getattr(a, name) or getattr(a, f'{name}_version', None)] or ['agy']
     binaries = {name: agent_binary(a, name) for name in backends} if controller else {}
     missing = [name for name, binary in binaries.items() if binary is None]
     if 'myflicker' in missing:
         raise ValueError('Install the Linux MyFlicker CLI from your distribution channel and '
                          'pass --myflicker /path/to/myflicker or put it on PATH')
+    if 'agy' in missing:
+        raise ValueError('Install Antigravity CLI and pass --agy /path/to/agy or put it on PATH')
     if missing and a.wheelhouse:
         raise ValueError('Offline controller deployment requires ' +
                          ', '.join(f'--{name} or an installed {name} CLI' for name in missing))

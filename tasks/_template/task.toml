@@ -22,8 +22,7 @@ arch     = "sm100"                   # the target GPU (sm90, sm100, ...)
 # timing = "device"                  # device | e2e
 
 # [agent]                            # both agents; [agent.teacher] / [agent.student] for one
-# model  = "wanqing/gpt-6.1-sol"
-# effort = "xhigh"
+# backend = "agy"
 
 # [budget]
 # hours           = 4                # the loop's wall clock: reconnaissance, distillation, student rounds

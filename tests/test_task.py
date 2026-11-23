@@ -49,8 +49,8 @@ def test_minimal_task_takes_every_default(tmp_path):
     assert t.arch == "sm100"
     assert t.reference is None and t.mode == task_mod.MODE_GENERATE
     assert t.target.ratio == 1.2 and t.target.ms is None and t.target.timing == "device"
-    assert (t.teacher.backend, t.teacher.model, t.teacher.effort) == ("myflicker", "wanqing/gpt-6.1-sol", "xhigh")
-    assert (t.student.backend, t.student.model, t.student.effort) == ("myflicker", "wanqing/gpt-6.1-sol", "xhigh")
+    assert (t.teacher.backend, t.teacher.model, t.teacher.effort) == ("agy", "gemini-4-carbon-medium", "medium")
+    assert (t.student.backend, t.student.model, t.student.effort) == ("agy", "gemini-4-neon-high", "high")
     assert (t.budget.hours, t.budget.max_meta, t.budget.reference_hours) == (4.0, 3, 8.0)
     assert [s.name for s in t.shapes] == ["small", "large"]
     assert all(s.groups_to_add == 3 for s in t.shapes)
@@ -70,6 +70,26 @@ def test_the_task_overrides_global_config_key_by_key(tmp_path):
                                                                          "low", 600)
     assert t.teacher.provider == t.student.provider == "native"
     assert (t.budget.hours, t.budget.max_meta) == (1.0, 3)
+
+
+def test_agy_uses_role_model_defaults(tmp_path):
+    t = load_task(_task(tmp_path, MINIMAL + '[agent]\nbackend = "agy"\n'), kb_root=_kb(tmp_path))
+    assert (t.teacher.model, t.teacher.effort) == ("gemini-4-carbon-medium", "medium")
+    assert (t.student.model, t.student.effort) == ("gemini-4-neon-high", "high")
+
+
+def test_task_agent_override_only_changes_the_selected_role(tmp_path):
+    toml = MINIMAL + '[agent.teacher]\nbackend = "agy"\nmodel = "gemini-4-neon-medium"\n'
+    t = load_task(_task(tmp_path, toml), kb_root=_kb(tmp_path))
+    assert (t.teacher.model, t.teacher.effort) == ("gemini-4-neon-medium", None)
+    assert (t.student.backend, t.student.model) == ("agy", "gemini-4-neon-high")
+
+
+def test_agy_effort_override_keeps_the_default_model_family(tmp_path):
+    toml = MINIMAL + '[agent]\nbackend = "agy"\n[agent.teacher]\neffort = "high"\n'
+    t = load_task(_task(tmp_path, toml), kb_root=_kb(tmp_path))
+    assert (t.teacher.model, t.teacher.effort) == ("gemini-4-carbon", "high")
+    assert (t.student.model, t.student.effort) == ("gemini-4-neon-high", "high")
 
 
 def test_a_provider_must_be_declared_and_its_key_set(tmp_path, monkeypatch):

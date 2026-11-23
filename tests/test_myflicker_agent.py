@@ -129,7 +129,7 @@ pathlib.Path('after-acceptance').write_text(sys.stdin.read())
 
 def test_reference_turn_obeys_deadline_when_cli_stops_reading(tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(SCRIPTS))
-    import myflicker_goal
+    import stream_goal
 
     (tmp_path / "spec.json").write_text(json.dumps({
         "condition": "x" * 1_000_000, "reply": str(tmp_path / "missing"),
@@ -137,4 +137,4 @@ def test_reference_turn_obeys_deadline_when_cli_stops_reading(tmp_path, monkeypa
     }))
     monkeypatch.setenv("FK_GOAL_DEADLINE", str(time.time() + 0.3))
     cmd = [sys.executable, "-c", "import time; time.sleep(10)"]
-    assert myflicker_goal.run_goal(cmd, tmp_path) == 124
+    assert stream_goal.run_goal(cmd, tmp_path) == 124

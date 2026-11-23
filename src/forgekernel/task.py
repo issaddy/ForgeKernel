@@ -83,8 +83,12 @@ LANGUAGES = ("cutedsl", "cuda")
 # The loop's own language name for each task language (forgekernel.loop.lang_mode).
 LOOP_LANGUAGE = {"cutedsl": "cutedsl", "cuda": "cuda-sol"}
 TIMINGS = ("device", "e2e")
-BACKENDS = ("claude", "codex", "myflicker")
+BACKENDS = ("claude", "codex", "myflicker", "agy")
 ROLES = ("teacher", "student")
+AGY_MODELS = {
+    "teacher": ("gemini-4-carbon-medium", "medium"),
+    "student": ("gemini-4-neon-high", "high"),
+}
 MIN_INPUT_GROUPS = 3
 
 MODE_SOURCE = "source"
@@ -245,7 +249,8 @@ def load_task(task_dir: str | Path, *, kb_root: Path | None = None,
 
     own = _read_toml(d / TASK_FILE, problems)
     _unknown_keys(own, problems)
-    cfg = merge_config(read_global_config(problems), own)
+    base = read_global_config(problems)
+    cfg = merge_config(base, own)
 
     t = _table(cfg, "task", problems)
     language = t.get("language")
@@ -274,8 +279,9 @@ def load_task(task_dir: str | Path, *, kb_root: Path | None = None,
                             "(sealed into its card at `forge new`); leave the table out")
     reference = _read_reference(d, cfg, problems)
     target = _read_target(cfg, problems)
-    teacher = _read_agent(cfg.get("agent", {}), "teacher", problems)
-    student = _read_agent(cfg.get("agent", {}), "student", problems)
+    agent_layers = cfg.get("agent", {}), base.get("agent", {}), own.get("agent", {})
+    teacher = _read_agent(*agent_layers, "teacher", problems)
+    student = _read_agent(*agent_layers, "student", problems)
     budget = _read_budget(cfg, problems)
 
     if problems:
@@ -647,15 +653,32 @@ def _read_target(cfg: dict, problems: list[str]) -> Target:
                   ms=float(ms) if _positive(ms) else None, timing=timing)
 
 
-def _read_agent(agents: dict, role: str, problems: list[str]) -> AgentSpec:
-    """One agent's settings: [agent] with [agent.<role>] over it, already merged across the
-    layers (merge_config)."""
+def _agent_settings(agents: dict, role: str) -> dict:
     agents = agents if isinstance(agents, dict) else {}
     own = agents.get(role, {})
-    a = {**{k: v for k, v in agents.items() if not isinstance(v, dict)},
-         **(own if isinstance(own, dict) else {})}
+    return {**{k: v for k, v in agents.items() if not isinstance(v, dict)},
+            **(own if isinstance(own, dict) else {})}
+
+
+def _read_agent(agents: dict, base: dict, task: dict, role: str, problems: list[str]) -> AgentSpec:
+    """Read a merged role, using agy model defaults when a task switches to agy."""
+    a = _agent_settings(agents, role)
     where = f"[agent.{role}]"
     backend = a.get("backend")
+    base_role = _agent_settings(base, role)
+    override = _agent_settings(task, role)
+    if backend == "agy":
+        model, effort = AGY_MODELS[role]
+        if base_role.get("backend") == "agy":
+            model = base_role.get("model", model)
+            effort = base_role.get("effort", effort)
+        if "effort" in override and override["effort"] != effort:
+            model = model.removesuffix(f"-{effort}")
+        a["model"] = override.get("model", model)
+        a["effort"] = override.get("effort", None if "model" in override else effort)
+    elif base_role.get("backend") == "agy":
+        a["model"] = override.get("model", "wanqing/gpt-6.1-sol" if backend == "myflicker" else None)
+        a["effort"] = override.get("effort", "xhigh")
     if backend not in BACKENDS:
         problems.append(f"{where} backend must be one of {list(BACKENDS)}, got {backend!r}")
     provider = a.get("provider")

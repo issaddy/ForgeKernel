@@ -79,9 +79,7 @@ ratio  = 1.2                        # multiple of the reference's speed (>1 = fa
 timing = "device"                   # the timing basis: device | e2e
 
 [agent]
-backend = "myflicker"
-model   = "wanqing/gpt-6.1-sol"
-effort  = "xhigh"
+backend = "agy"
 
 [budget]
 hours    = 4                        # the inner loop's wall clock
@@ -103,10 +101,10 @@ endpoints). The "Default" column below is what `global_config/` holds.
 | | `deny` | no | `[]` | extra paths no agent may read |
 | `[target]` | `ratio` / `ms` | no | `ratio = 1.2` | one or the other; by default 20% faster than the reference; without a reference and without `ms`, see §3.3 |
 | | `timing` | no | `device` | the timing basis |
-| `[agent]` (both agents), `[agent.teacher]`, `[agent.student]` (one) | `backend` | no | `myflicker` | the agent CLI, `myflicker`, `claude`, or `codex` |
+| `[agent]` (both agents), `[agent.teacher]`, `[agent.student]` (one) | `backend` | no | `agy` | the agent CLI, `myflicker`, `claude`, `codex`, or `agy` |
 | | `provider` | no | `native` | where the tokens go: `native` = the CLI's own login state and environment; or a name from `backends.toml` |
-| | `model` | no | `wanqing/gpt-6.1-sol` | model requested from the selected CLI |
-| | `effort` | no | `xhigh` for both roles | reasoning effort |
+| | `model` | no | teacher `gemini-4-carbon-medium`, student `gemini-4-neon-high` | model requested from the selected CLI |
+| | `effort` | no | teacher `medium`, student `high` | reasoning effort |
 | | `timeout_s` | no | student 7200; teacher 14400 | one turn's wall-clock limit |
 | `[budget]` | `hours` | no | `4` | the inner loop's wall clock |
 | | `max_meta` | no | `3` | the cap on outer rounds |
@@ -114,6 +112,25 @@ endpoints). The "Default" column below is what `global_config/` holds.
 
 Credentials (API keys, tokens) never go in `task.toml`; a run reads them from the environment or from
 `local.env` (§9).
+
+#### Antigravity CLI
+
+Sign in with `agy` on the ForgeKernel controller and use `agy models` to select a model.
+
+```toml
+[agent]
+backend = "agy"
+provider = "native"
+```
+
+The teacher defaults to `gemini-4-carbon-medium` at `medium`, and the student to
+`gemini-4-neon-high` at `high`. Set a different model under `[agent.teacher]` or
+`[agent.student]` as needed. An effort-only override keeps that role's default model family.
+When setting both a model slug with an effort suffix and an explicit `effort`, use matching
+values.
+
+Use `forge new` and the printed `forge run` command. Set `FK_AGY_BIN` only if
+`agy` is outside PATH. Antigravity runs agent shell commands in its terminal sandbox.
 
 ### 2.2 `description.md`
 
@@ -276,7 +293,7 @@ the run directory, the delivery) is as for an ordinary task. Details are in
 - One table each for the teacher and the student, with structured fields: `backend`, `provider`,
   `model`, `effort`, `timeout_s`. The harness builds the command itself, so it can handle /goal
   sessions, session continuation, usage accounting and permission settings uniformly.
-- MyFlicker is the default. Configure the account in the Linux GPU container. To select
+- Antigravity CLI is the default. Configure the account in the Linux GPU container. To select
   Claude Code or Codex, set `backend = "claude"` or `backend = "codex"` and choose a
   model and reasoning effort available to that CLI.
 - With `provider = "native"`, the CLI's own login state and environment decide where the tokens go;
@@ -462,8 +479,9 @@ Trade-offs made in implementation, and where the result departs from the text ab
    pricing, stall and the timeline, read `meta_workloads`, which now lists every shape.
 7. **Agent commands**: built in `src/forgekernel/agents.py`. For regular turns, MyFlicker
    reads text from stdin and returns streaming JSON. Claude uses `claude -p`, and Codex uses
-   `codex exec`. For reference generation, Claude and Codex use native `/goal` in tmux.
-   ForgeKernel drives MyFlicker through successive stream-JSON turns in one session,
+   `codex exec`. Antigravity CLI reads text from stdin and returns a JSON result.
+   For reference generation, Claude and Codex use native `/goal` in tmux.
+   ForgeKernel drives MyFlicker and Antigravity through successive stream-JSON turns in one session,
    using the same reference budget and deliverable check. See the
    [container guide](../../integrations/myflicker/README.md).
 8. **Self-evolution**: `scripts/self_evolve.py`. Only `cutedsl` tasks for now (the next generation's

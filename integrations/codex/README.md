@@ -1,6 +1,6 @@
 # Codex integration
 
-ForgeKernel defaults to [MyFlicker in a GPU container](../myflicker/README.md).
+ForgeKernel defaults to [Antigravity CLI in a GPU container](../../docs/design/v1-launch.md#antigravity-cli).
 Codex can invoke the shared startup skill and can also be selected explicitly as
 an agent backend.
 

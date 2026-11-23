@@ -11,7 +11,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from myflicker_goal import run_goal
+from stream_goal import run_goal
 
 
 def config_dir():

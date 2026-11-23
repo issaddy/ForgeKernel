@@ -32,7 +32,7 @@ ForgeKernel is part of the **Forge family**, together with
 ## News
 
 - 🛠️ **[2026-11]** The shared `forge-start` skill can set up, launch, and resume a run.
-  See the [GPU container guide](integrations/myflicker/README.md).
+  See the [GPU container guide](docs/design/v1-launch.md#antigravity-cli).
 - 📄 **[2026-11]** ForgeKernel paper release: [arXiv:2611.04998](https://arxiv.org/abs/2611.04998).
 - 📄 **[2026-10]** JustGoal paper release: [arXiv:2610.36434](https://arxiv.org/abs/2610.36434).
 - 🏆 **[2026-10]** We reached **#1** on the FlashInfer-Bench leaderboard of NVIDIA
@@ -77,12 +77,12 @@ Enter a Linux container with an NVIDIA GPU and clone this repository there. CuTe
 have architecture knowledge bases for [Hopper (`sm90`)](hw_kb/cutedsl/sm90/index.md),
 [Blackwell (`sm100`)](hw_kb/cutedsl/sm100/index.md), and
 [Blackwell (`sm120`)](hw_kb/cutedsl/sm120/index.md). Set the task's `arch` to match the GPU.
-The default setup runs ForgeKernel, the authenticated MyFlicker CLI, and GPU jobs in that container.
+The default setup runs ForgeKernel, the authenticated Antigravity CLI, and GPU jobs in that container.
 
 **1. Set up the container.** Use Python 3.11 or newer, git, CUDA PyTorch, and Bubblewrap
-(`bwrap`) with Linux namespace support. Install MyFlicker for the container's platform
+(`bwrap`) with Linux namespace support. Install Antigravity CLI for the container's platform
 and sign in inside the container. Nsight Compute (`ncu`) enables profiling when
-counters are available. See the [container guide](integrations/myflicker/README.md)
+counters are available. See the [container guide](docs/design/v1-launch.md#antigravity-cli)
 for the prerequisites and the shared `forge-start` skill.
 
 From the checkout, install ForgeKernel into an environment that can import CUDA
@@ -97,7 +97,7 @@ python -m pip install nvidia-cutlass-dsl  # for the CuTe DSL example
 
 **2. Set up `local.env`.** Copy `local.env.example` on first setup. Keep
 `FK_DELIVERY=local`, set `FK_GPU` to the CUDA device index visible inside the
-container, and set `FK_MYFLICKER_BIN` if the CLI is outside PATH.
+container, and set `FK_AGY_BIN` if the CLI is outside PATH.
 
 **3. Run the RMSNorm example.** It uses a PyTorch reference and targets Blackwell by
 default. On Hopper, including H800, set `arch = "sm90"` in the task's `task.toml`.
@@ -129,7 +129,8 @@ PyTorch reference after about 1.5 hours:
 
 The shared `forge-start` skill defaults to the container setup above. To explicitly
 select another agent backend, see [Claude Code](integrations/claude-code/README.md)
-or [Codex](integrations/codex/README.md). For a separate GPU host, see
+or [Codex](integrations/codex/README.md). For [MyFlicker](integrations/myflicker/README.md), set `backend = "myflicker"`.
+For a separate GPU host, see
 [SSH delivery](docs/design/v1-launch.md#9-where-it-runs).
 
 ## How It Works
@@ -185,7 +186,7 @@ onto, as in ForgeTrain: `models.toml` sets `[agent]` (`backend`, `provider`, `mo
 `timeout_s`; `[agent.teacher]` / `[agent.student]` for one agent), `loop.toml` sets `[target]`
 and `[budget]`, and `backends.toml` lists the API endpoints a `provider` other than `native`
 can name, with the key read from `local.env`. The defaults are a 1.2× target in device time,
-4 hours of loop, and 3 teacher rounds. Both MyFlicker agents default to `wanqing/gpt-6.1-sol` with `xhigh`.
+4 hours of loop, and 3 teacher rounds. The teacher defaults to `gemini-4-carbon-medium` and the student to `gemini-4-neon-high`.
 The paper's runs used
 Claude Fable 5.1 as the arch agent and Claude Opus 5 as the coding agent.
 
