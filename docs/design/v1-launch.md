@@ -103,8 +103,8 @@ endpoints). The "Default" column below is what `global_config/` holds.
 | | `timing` | no | `device` | the timing basis |
 | `[agent]` (both agents), `[agent.teacher]`, `[agent.student]` (one) | `backend` | no | `agy` | the agent CLI, `myflicker`, `claude`, `codex`, or `agy` |
 | | `provider` | no | `native` | where the tokens go: `native` = the CLI's own login state and environment; or a name from `backends.toml` |
-| | `model` | no | teacher `gemini-4-carbon-medium`, student `gemini-4-neon-high` | model requested from the selected CLI |
-| | `effort` | no | teacher `medium`, student `high` | reasoning effort |
+| | `model` | no | teacher `gemini-4-neon-xhigh`, student `gemini-4-neon-high` | model requested from the selected CLI |
+| | `effort` | no | teacher `xhigh`, student `high` | reasoning effort |
 | | `timeout_s` | no | student 7200; teacher 14400 | one turn's wall-clock limit |
 | `[budget]` | `hours` | no | `4` | the inner loop's wall clock |
 | | `max_meta` | no | `3` | the cap on outer rounds |
@@ -123,7 +123,7 @@ backend = "agy"
 provider = "native"
 ```
 
-The teacher defaults to `gemini-4-carbon-medium` at `medium`, and the student to
+The teacher defaults to `gemini-4-neon-xhigh` at `xhigh`, and the student to
 `gemini-4-neon-high` at `high`. Set a different model under `[agent.teacher]` or
 `[agent.student]` as needed. An effort-only override keeps that role's default model family.
 When setting both a model slug with an effort suffix and an explicit `effort`, use matching

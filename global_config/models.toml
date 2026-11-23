@@ -12,6 +12,6 @@ model = "gemini-4-neon-high"
 effort = "high"
 
 [agent.teacher]
-model = "gemini-4-carbon-medium"
-effort = "medium"
+model = "gemini-4-neon-xhigh"
+effort = "xhigh"
 timeout_s = 14400           # reconnaissance, distillation and diagnosis run for hours

@@ -394,7 +394,7 @@ def test_forge_init_copies_the_task_template(tmp_path, monkeypatch):
     assert {p.name for p in d.iterdir()} == {"task.toml", "description.md", "shapes.json"}
     task = load_task(d, kb_root=tmp_path)
     assert task.target.ratio == 1.2 and task.mode == "generate"
-    assert task.teacher.effort == "medium" and task.teacher.timeout_s == 14400
+    assert task.teacher.effort == "xhigh" and task.teacher.timeout_s == 14400
     assert task.student.effort == "high" and task.student.timeout_s == 7200
     assert launch.cmd_init(["gemm"]) == 2
 

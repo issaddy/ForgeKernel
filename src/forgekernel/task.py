@@ -86,7 +86,7 @@ TIMINGS = ("device", "e2e")
 BACKENDS = ("claude", "codex", "myflicker", "agy")
 ROLES = ("teacher", "student")
 AGY_MODELS = {
-    "teacher": ("gemini-4-carbon-medium", "medium"),
+    "teacher": ("gemini-4-neon-xhigh", "xhigh"),
     "student": ("gemini-4-neon-high", "high"),
 }
 MIN_INPUT_GROUPS = 3

@@ -167,7 +167,7 @@ forge new tasks/rmsnorm
 `models.toml` 定 `[agent]`（`backend`、`provider`、`model`、`effort`、`timeout_s`；`[agent.teacher]` /
 `[agent.student]` 只改一个 agent），`loop.toml` 定 `[target]` 与 `[budget]`，`backends.toml` 列出
 `provider` 不是 `native` 时可以指定的 API 端点，key 从 `local.env` 读。默认目标是 device 时间达到参照的
-1.2 倍，内层循环 4 小时，teacher 3 轮。架构和编码 agent 默认分别使用 `gemini-4-carbon-medium` 和 `gemini-4-neon-high`。论文实验使用的是 Claude Fable 5.1
+1.2 倍，内层循环 4 小时，teacher 3 轮。架构和编码 agent 默认分别使用 `gemini-4-neon-xhigh` 和 `gemini-4-neon-high`。论文实验使用的是 Claude Fable 5.1
 和 Claude Opus 5。
 
 ## 自进化
