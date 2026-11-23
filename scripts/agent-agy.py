@@ -35,8 +35,8 @@ def run_turn(cmd, timeout):
 def main():
     model, effort, timeout = sys.argv[1:4]
     settings = Path(".agents/forgekernel-agy.json").resolve()
-    cmd = [os.environ.get("FK_AGY_BIN") or "agy", "--model", model, "--mode", "accept-edits",
-           "--sandbox", "--settings", str(settings)]
+    cmd = [os.environ.get("FK_AGY_BIN") or "agy", "--model", model,
+           "--dangerously-skip-permissions", "--sandbox", "--settings", str(settings)]
     if effort:
         cmd.extend(("--effort", effort))
     if os.environ.get("FK_AGENT_DRIVER") == "goal":

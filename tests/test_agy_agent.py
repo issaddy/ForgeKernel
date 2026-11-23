@@ -48,6 +48,7 @@ def flag(name):
     return args[args.index(name) + 1]
 assert flag('--model') == 'model' and flag('--effort') == 'high'
 assert '--sandbox' in args and Path(flag('--settings')).is_file()
+assert '--dangerously-skip-permissions' in args
 if mode in ('turn', 'timeout', 'wall-timeout'):
     assert flag('--input-format') == 'text' and flag('--output-format') == 'json'
     assert sys.stdin.read() == 'work please'
@@ -119,9 +120,7 @@ def test_agy_grants_teacher_the_detached_run_trees(tmp_path):
     policy = AgentPolicy("source", tmp_path / "checkout", teacher_trees=(recon, source),
                          operator_tree=card)
 
-    settings = policy.agy_settings("teacher", workspace)
-    assert settings["enableTerminalSandbox"] and settings["toolPermission"] == "proceed-in-sandbox"
-    teacher = settings["permissions"]
+    teacher = policy.agy_settings("teacher", workspace)["permissions"]
     assert {f"read_file({source})", f"write_file({card})", f"write_file({recon})"} <= set(
         teacher["allow"])
     assert f"write_file({source})" not in teacher["allow"]

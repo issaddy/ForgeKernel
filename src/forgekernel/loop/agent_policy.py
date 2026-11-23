@@ -476,8 +476,7 @@ class AgentPolicy:
             deny.extend(["read_url(*)", "execute_url(*)"])
         elif not self.no_cluster(role) and not self.deny_urls(role):
             allow.append("read_url(*)")
-        return {"enableTerminalSandbox": True, "toolPermission": "proceed-in-sandbox",
-                "permissions": {"allow": allow, "deny": deny}}
+        return {"permissions": {"allow": allow, "deny": deny}}
 
     def install(self, role: str, workspace: Path) -> Path:
         """Write this role's settings into ``workspace`` and keep them out of git.

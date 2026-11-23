@@ -130,7 +130,8 @@ When setting both a model slug with an effort suffix and an explicit `effort`, u
 values.
 
 Use `forge new` and the printed `forge run` command. Set `FK_AGY_BIN` only if
-`agy` is outside PATH. Antigravity runs agent shell commands in its terminal sandbox.
+`agy` is outside PATH. ForgeKernel passes `--dangerously-skip-permissions` for unattended
+agent turns and `--sandbox` to enable Antigravity's terminal sandbox where available.
 
 ### 2.2 `description.md`
 
