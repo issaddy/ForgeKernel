@@ -478,15 +478,15 @@ def write_judge(run, task, check_dir: Path, deny: list[str], feedback: str = "")
     from forgekernel.loop.cli import RealBackend
     check_dir.mkdir(parents=True, exist_ok=True)
     blackbox = task.mode == MODE_BLACKBOX
+    source = task.reference.source if task.mode == MODE_SOURCE else None
     policy = AgentPolicy(oracle_mode="blackbox" if blackbox else "source",
                          repo_root=repo_root(), ref_source_paths=tuple(Path(p) for p in deny),
-                         ref_source_urls=(), teacher_trees=(), dsl_source_dirs=(),
+                         ref_source_urls=(), teacher_trees=(source,) if source else (), dsl_source_dirs=(),
                          secret_files=(), language=task.loop_language)
     be = RealBackend(task.name, check_dir, None, "forge-judge", "forge-judge@localhost",
                      teacher_agent_cmd=agent_command(task.teacher, "teacher"),
                      agent_policy=policy)
     be.agent_cmd = be.teacher_agent_cmd
-    source = task.reference.source if task.mode == MODE_SOURCE else None
     for attempt in range(1, judge_mod.ATTEMPTS + 1):
         _say(f"the judge: teacher turn {attempt}/{judge_mod.ATTEMPTS}")
         be.run_agent(judge_mod.judge_prompt(task, check_dir, reference_source=source,

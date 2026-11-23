@@ -162,6 +162,7 @@ class AgentPolicy:
     # — the records its deliverable check and its acceptance trust.
     deny_write: tuple[Path, ...] = ()
     hook_python: str = field(default_factory=lambda: sys.executable)
+    operator_tree: Path | None = None
 
     def _teacher_denied(self) -> bool:
         return self.oracle_mode == ORACLE_BLACKBOX or self.source_teacher_denies
@@ -451,10 +452,18 @@ class AgentPolicy:
 
     def agy_settings(self, role: str, workspace: Path) -> dict:
         """Translate the turn's filesystem and tool rules into Antigravity permissions."""
-        readable = dict.fromkeys([self.repo_root, *self.dsl_source_dirs,
-                                  _abs(sys.prefix), _abs(sys.base_prefix)])
-        allow = [*(f"read_file({p})" for p in readable),
-                 *(f"write_file({p})" for p in self.allow_write(role))]
+        readable = [self.repo_root, *self.dsl_source_dirs, _abs(sys.prefix), _abs(sys.base_prefix)]
+        writable = self.allow_write(role)
+        if self.operator_tree:
+            readable.append(self.operator_tree)
+            if role == ROLE_TEACHER:
+                writable.append(self.operator_tree)
+                writable.extend(p for p in self.teacher_trees
+                                if self.operator_tree.parent in p.parents)
+        if role == ROLE_TEACHER and not self._teacher_denied():
+            readable.extend(self.teacher_trees)
+        allow = [*(f"read_file({p})" for p in dict.fromkeys(readable)),
+                 *(f"write_file({p})" for p in dict.fromkeys(writable))]
         denied = [*self._deny_paths(role, workspace), self.repo_root / "local.env",
                   Path.home() / ".gemini"]
         read_only = [*self._deny_write_paths(workspace), workspace / ".agents", self.repo_root / ".git"]
@@ -467,7 +476,8 @@ class AgentPolicy:
             deny.extend(["read_url(*)", "execute_url(*)"])
         elif not self.no_cluster(role) and not self.deny_urls(role):
             allow.append("read_url(*)")
-        return {"toolPermission": "proceed-in-sandbox", "permissions": {"allow": allow, "deny": deny}}
+        return {"enableTerminalSandbox": True, "toolPermission": "proceed-in-sandbox",
+                "permissions": {"allow": allow, "deny": deny}}
 
     def install(self, role: str, workspace: Path) -> Path:
         """Write this role's settings into ``workspace`` and keep them out of git.
@@ -713,6 +723,7 @@ def from_config(cfg: dict, *, oracle_mode: str, repo_root: Path,
         dsl_source_dirs=(tuple(_abs(p) for p in declared) if declared
                          else tuple(dict.fromkeys(_abs(p) for p in dsl_source_dirs_default))),
         secret_files=secret_files_for(repo_root, op, teacher_trees),
+        operator_tree=operators_dir(repo_root) / op if op else None,
         language=language,
         source_teacher_denies=bool(lc.get(KEY_SOURCE_TEACHER_DENIES, False)),
     )

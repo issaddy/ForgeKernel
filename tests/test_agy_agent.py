@@ -110,6 +110,28 @@ Path('after-approval').write_text(sys.stdin.read())
             assert (workspace / "after-approval").read_text() == ""
 
 
+def test_agy_grants_teacher_the_detached_run_trees(tmp_path):
+    workspace = tmp_path / "run" / "ws"
+    operators = tmp_path / "run" / "operators"
+    card = operators / "op"
+    recon = operators / "_opref"
+    source = tmp_path / "run" / "task" / "reference"
+    policy = AgentPolicy("source", tmp_path / "checkout", teacher_trees=(recon, source),
+                         operator_tree=card)
+
+    settings = policy.agy_settings("teacher", workspace)
+    assert settings["enableTerminalSandbox"] and settings["toolPermission"] == "proceed-in-sandbox"
+    teacher = settings["permissions"]
+    assert {f"read_file({source})", f"write_file({card})", f"write_file({recon})"} <= set(
+        teacher["allow"])
+    assert f"write_file({source})" not in teacher["allow"]
+
+    student = policy.agy_settings("student", workspace)["permissions"]
+    assert f"read_file({card})" in student["allow"]
+    assert f"write_file({card})" not in student["allow"]
+    assert {f"read_file({source})", f"read_file({recon})"} <= set(student["deny"])
+
+
 def test_agy_online_reference_policy_allows_unrelated_docs(tmp_path):
     cmd = agent_command(AgentSpec("agy", "model", "high"), "student")
     policy = AgentPolicy("source", tmp_path, student_online=True,
