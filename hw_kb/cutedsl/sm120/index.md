@@ -26,6 +26,7 @@ CuTe DSL target: `sm_120a`. Verified entries cite SM120 GPU probes below.
 | [`warp_mma_f16_bf16`](warp_mma_f16_bf16.md) | Feed a warp MMA with `ldmatrix` and write its FP32 accumulator | ✅ Verified |
 | [`warp_mma_fp8`](warp_mma_fp8.md) | Use an unscaled E4M3 or E5M2 warp MMA | ✅ Verified |
 | [`cp_async_aligned_tile`](cp_async_aligned_tile.md) | Stage aligned global-to-shared tiles and wait for their data | ✅ Verified |
+| [`cp_async_hmma_partial_wait`](cp_async_hmma_partial_wait.md) | 在 commit 后用已就绪的寄存器 operand 发射 HMMA，再部分等待下一组 | ✅ Verified — PROBE PASS max_diff=0.0, job 1795350256 |
 | [`tma_tile_load`](tma_tile_load.md) | TMA global-to-shared load, mbarrier completion and descriptor-boundary zero fill | ✅ Verified |
 | [`tma_descriptor_promotion`](tma_descriptor_promotion.md) | Use equivalent driver-encoded tensor maps with independent L2 promotion settings | ✅ Verified |
 | [`masked_warp_softmax`](masked_warp_softmax.md) | Stable maximum and sum across two segments, including fully masked rows | ✅ Verified |
